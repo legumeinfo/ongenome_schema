@@ -1,6 +1,6 @@
 # 'ongenome' Schema
 
-Repository to describe, create and develope loader scripts for this schema. 
+Repository to describe and create the schema, and develope loader scripts. 
 
 #### About
 
