@@ -3,6 +3,19 @@
 #UNDER DEVELOPMENT  
 #Modified from expr-dataset-excel-to-md.py
 
+
+#USAGE:  expr-dataset-excel-to-json-for-loading.py  <path/to/file.xlsx>
+#EX:  $ python expr-dataset-excel-to-json-for-loading.py /usr/local/www/data/private/Cicer_arietinum/expression_datasets/cicar-SRP017394-atlas-on-ICC4958_DataStoreFormat.xlsx
+
+
+##STATUS:
+## Functional and prints json_all
+## Will modify after hearing Connor's need
+## Need to delete lots of junk (remnant code pieces)
+
+
+
+
 '''
 -- Extracts from a structures Excel file, information about an expression 
    dataset for loading to ongenome schema.
