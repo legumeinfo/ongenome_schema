@@ -29,10 +29,10 @@ Datasets are loaded from either xlsx or md files.  Support currently only exists
 parser.add_argument('--organisms', metavar = '<organisms.json>',
 help='''Organisms JSON dump from Chado as list\n\n''')
 
-parser.add_argument('--organismgff', metavar = '</path/to/my/datastore/organism/my_annotations.gff.gz>',
+parser.add_argument('--gff', metavar = '</path/to/my/datastore/organism/my_annotations.gff.gz>',
 help='''Annotation file for this organism\n\n''')
 
-parser.add_argument('--organismlist', metavar = '<file_of_organismgffs.txt>',
+parser.add_argument('--gfflist', metavar = '<file_of_organismgffs.txt>',
 help='''File containing annotation gff files; one per line\n\n''')
 
 parser.add_argument('--datasetmd', metavar = '<dataset.md>',
@@ -50,6 +50,9 @@ help='''Will drop the ongenome schema\n\n''')
 
 parser.add_argument('--load_schema', metavar = '<my_schema.sql>',
 help='''Will load the provided schema\n\n''')
+
+parser.add_argument('--count_data', metavar = '<count_data.tab>',
+help='''Count data tabular (Need to actually see what formats are ok)\n\n''')
 
 parser._optionals.title = "Program Options"
 args = parser.parse_args()
@@ -193,7 +196,7 @@ def load_organism(cursor, data):
     cursor.execute(check, [data['name']])
     result = cursor.fetchall()
     if result:
-        logger.info('Organism {} already found in DB'.format(data['name']))
+        logger.warning('Organism {} already found in DB'.format(data['name']))
         #should I update etc
     else:
         logger.info('Adding new organism {}'.format(data['name']))
@@ -232,7 +235,7 @@ def load_genome(cursor, data):
     cursor.execute(check, [data['name']])
     result = cursor.fetchall()
     if result:
-        logger.info('Genome {} already found in DB'.format(data['name']))
+        logger.warning('Genome {} already found in DB'.format(data['name']))
         #should I update etc
     else:
         logger.info('Adding new genome {}'.format(data['name']))
@@ -265,7 +268,7 @@ def load_model(cursor, data):
     cursor.execute(check, [data['genemodel_name']])
     result = cursor.fetchall()
     if result:
-        logger.info('Gene model {} already found in DB'.format(
+        logger.warning('Gene model {} already found in DB'.format(
                                                     data['genemodel_name'])
                    )
         #should I update etc
@@ -391,7 +394,7 @@ def organism_loader(annotation, db):
     db.commit()
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     #GET JUST ADDED ID FOR ORGANISM from DB
-    name = '{}.{}'.format(odata['abbrev'], source)
+    name = '{}.{}.{}.{}'.format(odata['abbrev'], source, buildv, annov)
     chado_name = '{}.{}.{}'.format(odata['abbrev'], source, buildv)
     aid = None #chado id for genome from analysis table
     logger.info('searching for genome {} in analysis...'.format(chado_name))
@@ -411,11 +414,12 @@ def organism_loader(annotation, db):
     cursor.execute(query, [odata['name']])
     result = cursor.fetchall()
     if not result:
-        logger.error('could not find organism id for genome {}'.format(name))
+        logger.error('could not find organism id for genome {}'.format(
+                                                                 shortname))
         return False
     oid = result[0]['organism_id']
     gdata = { #create object to load into db
-              'name' : chado_name, 'shortname' : name, 'description' : None,
+              'name' : name, 'shortname' : chado_name, 'description' : None,
               'source' : source, 'build' : buildv, 'annotation' : annov,
               'organism_id' : oid, 'notes' : None, 'chado_id' : aid
              }
@@ -427,11 +431,11 @@ def organism_loader(annotation, db):
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     #GET GENOME ID FROM DB
     query = '''select genome_id from ongenome.genome where name=%s'''
-    cursor.execute(query, [chado_name])
+    cursor.execute(query, [name])
     result = cursor.fetchall()
     if not result:
         logger.error('could not find genome id for genome {}'.format(
-                                                               chado_name))
+                                                               name))
         return False
     goid = result[0]['genome_id']
     logger.info('Parsing gene models from {}'.format(annotation))
@@ -498,11 +502,11 @@ def load_datasetsource(data, cursor, adata):
     geo_series = data.get('geo_series', None)
     notes = data.get('notes', None)
     check = '''select datasetsource_id from ongenome.datasetsource
-               where name=%s'''
-    cursor.execute(check, [name])
+               where shortname=%s'''
+    cursor.execute(check, [shortname])
     result = cursor.fetchall()
     if not result:
-        logger.info('adding new datasetsource: {}'.format(name))
+        logger.info('adding new datasetsource: {}'.format(shortname))
         insert = '''insert into ongenome.datasetsource 
                     (name, shortname, origin, description, bioproj_acc,
                      bioproj_title, bioproj_description, sra_proj_acc,
@@ -524,16 +528,17 @@ def load_datasetsource(data, cursor, adata):
             cursor.close()
             return False
         cursor.close()
-        logger.info('datasetsource {} loaded successfully'.format(name))
+        logger.info('datasetsource {} loaded successfully'.format(shortname))
     else:
-        logger.warning('datasetsource {} already exists in db'.format(name))
+        logger.warning('datasetsource {} already exists in db'.format(
+                                                                shortname))
     cursor.close()
     return True
 
 
 def load_method(data, cursor, adata):
-    if not data.get('name', None):  #not null
-        logger.error('name not found for method!  will not load!')
+    if not data.get('shortname', None):  #not null
+        logger.error('shortname not found for method!  will not load!')
         cursor.close()
         return False
     name = data.get('name', None)
@@ -543,11 +548,11 @@ def load_method(data, cursor, adata):
     description = data.get('description', None)
     details = data.get('details', None)
     notes = data.get('notes', None)
-    check = '''select method_id from ongenome.method where name=%s'''
-    cursor.execute(check, [name])
+    check = '''select method_id from ongenome.method where shortname=%s'''
+    cursor.execute(check, [shortname])
     result = cursor.fetchall()
     if not result:
-        logger.info('adding new method: {}'.format(name))
+        logger.info('adding new method: {}'.format(shortname))
         insert = '''insert into ongenome.method 
                     (name, shortname, version, analysis_date, description,
                      details, notes)
@@ -564,16 +569,16 @@ def load_method(data, cursor, adata):
             cursor.close()
             return False
         cursor.close()
-        logger.info('method {} loaded successfully'.format(name))
+        logger.info('method {} loaded successfully'.format(shortname))
     else:
-        logger.warning('method {} already exists in db'.format(name))
+        logger.warning('method {} already exists in db'.format(shortname))
     cursor.close()
     return True
 
 
 def load_dataset(data, cursor, adata):
-    if not data.get('name', None):#not null, key for lookup
-        logger.error('name not found for dataset!  will not load!')
+    if not data.get('shortname', None):#not null, key for lookup
+        logger.error('shortname not found for dataset!  will not load!')
         cursor.close()
         return False
     if not data.get('method_id', None): #not null
@@ -584,14 +589,14 @@ def load_dataset(data, cursor, adata):
         logger.error('datasetsource_id not found for dataset!  will not load!')
         cursor.close()
         return False
-    (genome, annotation) = ('.'.join(data['genome'].split('.')[:3]),
-                         data['genome'].split('.')[-1]) #isolate lookup values
+#    (genome, annotation) = ('.'.join(data['genome'].split('.')[:3]),
+#                         data['genome'].split('.')[-1]) #isolate lookup values
     get_genome = '''select genome_id from ongenome.genome 
-                    where name=%s and annotation=%s'''
-    cursor.execute(get_genome, [genome, annotation]) #get genome_id
+                    where name=%s'''
+    cursor.execute(get_genome, [data['genome']]) #get genome_id
     result = cursor.fetchone()
     if not result:
-        logger.error('count not find genome_id for {}'.format(data['genome']))
+        logger.error('could not find genome_id for {}'.format(data['genome']))
         cursor.close()
         return False
     genome_id = result['genome_id']
@@ -600,7 +605,7 @@ def load_dataset(data, cursor, adata):
     cursor.execute(get_organism, [genome_id])
     result = cursor.fetchone()
     if not result:
-        logger.error('count not find organism_id for {}'.format(data['genome']))
+        logger.error('could not find organism_id for {}'.format(data['genome']))
         cursor.close()
         return False
     organism_id = result['organism_id']
@@ -613,11 +618,11 @@ def load_dataset(data, cursor, adata):
     shortname = data.get('shortname', None)
     description = data.get('description', None)
     notes = data.get('notes', None)
-    check = '''select dataset_id from ongenome.dataset where name=%s'''
-    cursor.execute(check, [name])
+    check = '''select dataset_id from ongenome.dataset where shortname=%s'''
+    cursor.execute(check, [shortname])
     result = cursor.fetchall()
     if not result:
-        logger.info('adding new dataset {}'.format(name))
+        logger.info('adding new dataset {}'.format(shortname))
         insert = '''insert into ongenome.dataset
                 (genome_id, datasetsource_id, method_id, accession_no, name,
                  shortname, description, notes, load_date)
@@ -633,9 +638,9 @@ def load_dataset(data, cursor, adata):
             logger.error('insert failed for dataset {}'.format(e))
             cursor.close()
             return False
-        logger.info('dataset: {} added successfully'.format(name))
+        logger.info('dataset: {} added successfully'.format(shortname))
     else:
-        logger.warning('dataset {} already exists in db'.format(name))
+        logger.warning('dataset {} already exists in db'.format(shortname))
     cursor.close()
     return True
 
@@ -871,9 +876,9 @@ if __name__ == '__main__':
     db = connect_db()    #connect db
     orgs = args.organisms
     genes = args.genes
-    org_gff = args.organismgff
+    org_gff = args.gff
     schema = args.load_schema
-    org_list = args.organismlist
+    org_list = args.gfflist
     datasetmd = args.datasetmd
     datasetxlsx = args.datasetxlsx
 #    data = {'organism' : [], 'genome' : [], 'gene_models' : []}

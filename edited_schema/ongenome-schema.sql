@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS  ongenome.method (
   PRIMARY KEY (method_id)
 );
 CREATE INDEX ON ongenome.method (name);
+CREATE INDEX ON ongenome.method (shortname);
 
 -- 4. genome
 /*
@@ -184,6 +185,7 @@ CREATE TABLE  IF NOT EXISTS  ongenome.dataset (
   FOREIGN KEY (method_id) REFERENCES ongenome.method(method_id)
 );
 CREATE INDEX ON ongenome.dataset (name);
+CREATE INDEX ON ongenome.dataset (shortname);
 
 
 -- 8.  dataset_sample  table
