@@ -225,6 +225,10 @@ CREATE TABLE IF NOT EXISTS  ongenome.expressiondata (
   FOREIGN KEY (dataset_id) REFERENCES ongenome.dataset(dataset_id)
 );
 
+--CREATE INDEX ON ongenome.expressiondata (genemodel_id);
+--CREATE INDEX ON ongenome.expressiondata (dataset_id);
+--CREATE INDEX ON ongenome.expressiondata (dataset_sample_id);
+
  --EXPTDESIGN 
 
   -- A. treatment
