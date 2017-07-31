@@ -51,8 +51,8 @@ help='''Will drop the ongenome schema\n\n''')
 parser.add_argument('--load_schema', metavar = '<my_schema.sql>',
 help='''Will load the provided schema\n\n''')
 
-parser.add_argument('--count_data', metavar = '<count_data.tab>',
-help='''Count data tabular (Need to actually see what formats are ok)\n\n''')
+parser.add_argument('--counts', metavar = '<count_data.tab>',
+help='''Count data tabular\n\n''')
 
 parser._optionals.title = "Program Options"
 args = parser.parse_args()
@@ -645,7 +645,7 @@ def load_dataset(data, cursor, adata):
     return True
 
 
-def load_sample(data, cursor):  #populates sample and dataset_sample
+def load_sample(data, cursor, adata):  #populates sample and dataset_sample
     if not data.get('organism_id', None): #not null
         logger.error('no organism_id for samples!')
         cursor.close()
@@ -665,12 +665,19 @@ def load_sample(data, cursor):  #populates sample and dataset_sample
         logger.error('no sample data to load!')
         cursor.close()
         return False
+    #may need to drop index for expression data here once they exist.  They can be remade and it is faster when they are large to drop them and remake them after the load
     for s in data['sample_data']:
         if not s.get('sample_uniquename', None):  #not null
             logger.error('no sample_uniquename for sample!')
             cursor.close()
             return False
+        if not s.get('key'):
+            logger.error('no key for sample!')
+            cursor.close()
+            return False
         sample_uniquename = s.get('sample_uniquename', None)
+        key = s.get('key', None)
+        expression = adata['expression'][key]
         name = s.get('name', None)
         shortname = s.get('shortname', None)
         description = s.get('description', None)
@@ -732,10 +739,43 @@ def load_sample(data, cursor):  #populates sample and dataset_sample
                     insert = '''insert into ongenome.dataset_sample
                                 (dataset_id, sample_id)
                                 values
-                                (%s, %s)'''
+                                (%s, %s) returning dataset_sample_id'''
                     try:
                         logger.info('inserting dataset_sample')
                         cursor.execute(insert, [dataset_id, sample_id])
+                        result = cursor.fetchone()
+                        dataset_sample_id = result['dataset_sample_id']
+                        exp_value_type = None
+                        for e in expression:
+#                            check = '''select expressiondata_id from 
+#                                       ongenome.expressiondata where
+#                                       dataset_sample_id=%s and dataset_id=%s
+#                                       and genemodel_id=%s
+#                                    '''
+#                            cursor.execute(check, [dataset_sample_id,
+#                                                   dataset_id,
+#                                                   e])
+#                            result = cursor.fetchall()
+                            result = []
+                            if not result:
+                                logger.info('inserting expressiondata for sample {}: {} {} {} with value {}'.format(sample_uniquename, e, dataset_id, dataset_sample_id, expression[e]))
+
+                                insert = '''insert into ongenome.expressiondata
+                                        (genemodel_id, dataset_id,
+                                         dataset_sample_id, exp_value_type,
+                                         exp_value) values
+                                         (%s, %s, %s, %s, %s)'''
+                                try:
+                                    cursor.execute(insert, [e, dataset_id, 
+                                                        dataset_sample_id, 
+                                                        exp_value_type,
+                                                        expression[e]])
+                                except psycopg2.Error as e:
+                                    logger.error('expression insert failed {}!'.format(e))
+                                    cursor.close()
+                                    return False
+                            else:
+                                logger.warning('expressiondata {} {} {} with value {} already exists in db'.format(e, dataset_id, dataset_sample_id, expression[e]))
                     except psycopg2.Error as e:
                         logger.error('could not insert dataset_sample: {}'.format(e))
                         cursor.close()
@@ -794,7 +834,7 @@ def select_loader(table, data, db):
         logger.info('loading sample')
         cursor = db.cursor(
             cursor_factory=psycopg2.extras.RealDictCursor)
-        if not load_sample(data[table], cursor):
+        if not load_sample(data[table], cursor, data):
             return False
     elif table == 'treatment':
         logger.info('loading treatment')
@@ -821,7 +861,7 @@ def select_loader(table, data, db):
     return True
 
 
-def dataset_loader(dataset, db, t):  #could add checks beyond expression data
+def dataset_loader(dataset, db, t, counts): #could add checks beyond expression data
     table = ''  #Filled by lines with ##
     attribute = ''  #Filled by line with ####
     #order = ['datasource', 'method', 'dataset', 'samples', 'treatment',
@@ -845,14 +885,58 @@ def dataset_loader(dataset, db, t):  #could add checks beyond expression data
                         fields = line.split('\t')  #tab delimited data
                         if not 'sample_data' in data[table]:#first line header
                             data[table]['sample_data'] = [] #init sample_data
+                            data['expression'] = {}
                             header = fields
                             continue
                         temp = {}
                         for i,f in enumerate(fields):
                             temp[header[i]] = f  #create sample object
+                        if not temp.get('key', None):
+                            logger.error('key attribute must be provided in samples!')
+                            return False
                         data[table]['sample_data'].append(temp)
+                        data['expression'][temp['key']] = {}
                     else:
                         data[table][attribute] = line
+        with open(counts) as copen:
+            count = 0
+            s_list = []
+            expression = data['expression']
+            for line in copen:
+                if line.isspace() or not line or line.startswith('#'):
+                    continue
+                line = line.rstrip()
+                samples = line.split('\t')
+                if not count:
+                    for s in samples:
+                        if not s:
+                            continue
+                        if not s in expression:
+                            logger.error('No sample information for {}'.format(
+                                                                         s))
+                            return False
+                    s_list = samples[1:]
+                else:
+                    cursor = db.cursor(
+                                cursor_factory=psycopg2.extras.RealDictCursor
+                             )
+                    get_model_id = '''select genemodel_id from 
+                                      ongenome.genemodel where
+                                      genemodel_name=%s'''
+                    cursor.execute(get_model_id, [samples[0]])
+                    result = cursor.fetchone()
+                    if not result:
+                        logger.error('no gene model id for {}'.format(
+                                                                samples[0]))
+                        return False
+                    genemodel_id = result['genemodel_id']
+                    for i,v in enumerate(samples[1:]):
+                        expression[s_list[i]][genemodel_id] = v
+                count += 1
+#            for s in expression:
+#                for g in expression[s]:
+#                    print '{}\t{}\t{}'.format(s, g, expression[s][g])
+#        sys.exit(1)
         for o in order:  #load based on order. removes md order dependencies
             if not o in data:  #table seen in md
                 logger.error('did not parse {} from md'.format(o))
@@ -881,6 +965,7 @@ if __name__ == '__main__':
     org_list = args.gfflist
     datasetmd = args.datasetmd
     datasetxlsx = args.datasetxlsx
+    counts = args.counts
 #    data = {'organism' : [], 'genome' : [], 'gene_models' : []}
     if args.drop_schema:
         if not drop_schema(db):
@@ -945,20 +1030,36 @@ if __name__ == '__main__':
                     db.close()
                     sys.exit(1)
     if datasetmd: #check for markdown
+        if not counts:
+            logger.error('counts must be provided if dataset is provided')
+            db.close()
+            sys.exit(1)
         if not check_file(datasetmd):
             logger.error('Could not find: {}'.format(datasetmd))
             db.close()
             sys.exit(1)
-        if not dataset_loader(datasetmd, db, 'md'):
+        if not check_file(counts):
+            logger.error('Could not find: {}'.format(datasetmd))
+            db.close()
+            sys.exit(1)
+        if not dataset_loader(datasetmd, db, 'md', counts):
             logger.error('Dataset loading failed for {}'.format(datasetmd))
             db.close()
             sys.exit(1)
     if datasetxlsx: #check for excel
+        if not counts:
+            logger.error('counts must be provided if dataset is provided')
+            db.close()
+            sys.exit(1)
         if not check_file(datasetxlsx):
             logger.error('Could not find: {}'.format(datasetxlsx))
             db.close()
             sys.exit(1)
-        if not dataset_loader(datasetxlsx, db, 'xlsx'):
+        if not check_file(counts):
+            logger.error('Could not find: {}'.format(datasetmd))
+            db.close()
+            sys.exit(1)
+        if not dataset_loader(datasetxlsx, db, 'xlsx', counts):
             logger.error('Dataset loading failed for {}'.format(datasetxlsx))
             db.close()
             sys.exit(1)
