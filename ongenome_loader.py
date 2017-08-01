@@ -866,7 +866,7 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
     attribute = ''  #Filled by line with ####
     #order = ['datasource', 'method', 'dataset', 'samples', 'treatment',
     #         'dataset_sample', 'expressiondata'] # add treatment back when rdy
-    order = ['datasource', 'method', 'dataset', 'samples', 'expressiondata']
+    order = ['datasource', 'method', 'dataset', 'samples']
     data = {}
     if t == 'md':  #For markdown files
         header = []
@@ -946,13 +946,14 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
                 return False
             if not select_loader(o, data, db):  #load it
                 return False
-        return
     elif t == 'xlsx':
         return
     else:
         logger.error('format {} not recognized'.format(t))
         return False
+    logger.info('comminting transactions...')
     db.commit()
+    logger.info('commited successfully!')
     return True
 
 
