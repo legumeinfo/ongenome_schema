@@ -504,7 +504,7 @@ def load_datasetsource(data, cursor, adata):
     check = '''select datasetsource_id from ongenome.datasetsource
                where shortname=%s'''
     cursor.execute(check, [shortname])
-    result = cursor.fetchall()
+    result = cursor.fetchone()
     if not result:
         logger.info('adding new datasetsource: {}'.format(shortname))
         insert = '''insert into ongenome.datasetsource 
@@ -532,6 +532,9 @@ def load_datasetsource(data, cursor, adata):
     else:
         logger.warning('datasetsource {} already exists in db'.format(
                                                                 shortname))
+        new_id = result['datasetsource_id']
+        adata['dataset']['datasetsource_id'] = new_id
+        adata['samples']['datasetsource_id'] = new_id
     cursor.close()
     return True
 
@@ -550,7 +553,7 @@ def load_method(data, cursor, adata):
     notes = data.get('notes', None)
     check = '''select method_id from ongenome.method where shortname=%s'''
     cursor.execute(check, [shortname])
-    result = cursor.fetchall()
+    result = cursor.fetchone()
     if not result:
         logger.info('adding new method: {}'.format(shortname))
         insert = '''insert into ongenome.method 
@@ -572,6 +575,8 @@ def load_method(data, cursor, adata):
         logger.info('method {} loaded successfully'.format(shortname))
     else:
         logger.warning('method {} already exists in db'.format(shortname))
+        new_id = result['method_id']
+        adata['dataset']['method_id'] = new_id
     cursor.close()
     return True
 
@@ -620,7 +625,7 @@ def load_dataset(data, cursor, adata):
     notes = data.get('notes', None)
     check = '''select dataset_id from ongenome.dataset where shortname=%s'''
     cursor.execute(check, [shortname])
-    result = cursor.fetchall()
+    result = cursor.fetchone()
     if not result:
         logger.info('adding new dataset {}'.format(shortname))
         insert = '''insert into ongenome.dataset
@@ -641,6 +646,7 @@ def load_dataset(data, cursor, adata):
         logger.info('dataset: {} added successfully'.format(shortname))
     else:
         logger.warning('dataset {} already exists in db'.format(shortname))
+        adata['samples']['dataset_id'] = result['dataset_id']
     cursor.close()
     return True
 
