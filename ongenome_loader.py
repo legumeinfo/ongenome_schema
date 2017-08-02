@@ -11,6 +11,7 @@ import psycopg2.extras
 import re
 import datetime
 import gzip
+import openpyxl as opx
 from glob import glob
 #from ongenome import app, session, g
 
@@ -867,6 +868,24 @@ def select_loader(table, data, db):
     return True
 
 
+def xlsx_attribute_parser(ws, data):
+    for row in tuple(ws.rows):   # creates a tuple of all rows in ws_dataset
+        if (row[0].value and re.match('^#', row[0].value)):   # skip commented line, 1st col/cel is '#'
+            continue
+        if not row[1].value:
+            continue
+        k = row[1].value.lower()
+        v = row[2].value
+        if not k:
+            logger.error('key could not be parsed for {}'.format(row))
+            return False
+#            if not v:
+#                logger.error('value could not be parsed for {}'.format(row))
+#                return False
+        data[k] = v
+    return True
+
+
 def dataset_loader(dataset, db, t, counts): #could add checks beyond expression data
     table = ''  #Filled by lines with ##
     attribute = ''  #Filled by line with ####
@@ -874,8 +893,8 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
     #         'dataset_sample', 'expressiondata'] # add treatment back when rdy
     order = ['datasource', 'method', 'dataset', 'samples']
     data = {}
+    header = []
     if t == 'md':  #For markdown files
-        header = []
         with open(dataset) as mopen:
             for line in mopen:
                 line = line.rstrip()
@@ -904,59 +923,93 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
                         data['expression'][temp['key']] = {}
                     else:
                         data[table][attribute] = line
-        with open(counts) as copen:
-            count = 0
-            s_list = []
-            expression = data['expression']
-            for line in copen:
-                if line.isspace() or not line or line.startswith('#'):
+    elif t == 'xlsx':
+        #Read xlfile into workbook obj
+        tables = ['dataset', 'datasource', 'method', 'samples', 'expression']
+        data = {'dataset' : {}, 'datasource' : {},
+                'method' : {}, 'samples' : {}, 'expression' : {}}
+        wb = opx.load_workbook(dataset, read_only=True)
+        ws_dataset = wb.get_sheet_by_name('dataset')
+        ws_datasource = wb.get_sheet_by_name('datasource')
+        ws_method = wb.get_sheet_by_name('method')
+        sets = [ws_dataset, ws_datasource, ws_method]
+        ws_sample = wb.get_sheet_by_name('sample')
+#        ws_expdesign = wb.get_sheet_by_name('expdesign')
+        for i,s in enumerate(sets):
+            logger.info('reading {}...'.format(tables[i]))
+            if not xlsx_attribute_parser(s, data[tables[i]]):
+                return False
+        data['samples']['sample_data'] = []
+        logger.info('reading samples...')
+        for row in tuple(ws_sample):
+            if (row[0].value == 'sample_name'):   # if 1st col is ?sample_name?
+                for h in row:
+                    header.append(h.value)
+            else:
+                if (row[0].value and re.match('^#', row[0].value)):   # skip commented line, 1st col/cel is '#'
                     continue
-                line = line.rstrip()
-                samples = line.split('\t')
-                if not count:
-                    for s in samples:
-                        if not s:
-                            continue
-                        if not s in expression:
-                            logger.error('No sample information for {}'.format(
-                                                                         s))
-                            return False
-                    s_list = samples[1:]
-                else:
-                    cursor = db.cursor(
-                                cursor_factory=psycopg2.extras.RealDictCursor
-                             )
-                    get_model_id = '''select genemodel_id from 
-                                      ongenome.genemodel where
-                                      genemodel_name=%s'''
-                    cursor.execute(get_model_id, [samples[0]])
-                    result = cursor.fetchone()
-                    if not result:
-                        logger.error('no gene model id for {}'.format(
-                                                                samples[0]))
+                if not row[1].value:
+                    continue
+                temp = {}
+                for i,s in enumerate(row):
+                    temp[header[i]] = s.value
+                if not temp.get('key', None):
+                    logger.error('key attribute must be provided in samples!')
+                    return False
+                data['samples']['sample_data'].append(temp)
+                data['expression'][temp['key']] = {}
+    else:
+        logger.error('format {} not recognized'.format(t))
+        return False
+    logger.info('parsing counts data in {}...'.format(counts))
+    with open(counts) as copen:
+        count = 0
+        s_list = []
+        expression = data['expression']
+        for line in copen:
+            if line.isspace() or not line or line.startswith('#'):
+                continue
+            line = line.rstrip()
+            samples = line.split('\t')
+            if not count:
+                for s in samples:
+                    if not s:
+                        continue
+                    if not s in expression:
+                        logger.error('No sample information for {}'.format(
+                                                                     s))
                         return False
-                    genemodel_id = result['genemodel_id']
-                    for i,v in enumerate(samples[1:]):
-                        expression[s_list[i]][genemodel_id] = v
-                count += 1
+                s_list = samples[1:]
+            else:
+                cursor = db.cursor(
+                            cursor_factory=psycopg2.extras.RealDictCursor
+                         )
+                get_model_id = '''select genemodel_id from 
+                                  ongenome.genemodel where
+                                  genemodel_name=%s'''
+                cursor.execute(get_model_id, [samples[0]])
+                result = cursor.fetchone()
+                if not result:
+                    logger.error('no gene model id for {}'.format(
+                                                            samples[0]))
+                    return False
+                genemodel_id = result['genemodel_id']
+                for i,v in enumerate(samples[1:]):
+                    expression[s_list[i]][genemodel_id] = v
+            count += 1
 #            for s in expression:
 #                for g in expression[s]:
 #                    print '{}\t{}\t{}'.format(s, g, expression[s][g])
 #        sys.exit(1)
-        for o in order:  #load based on order. removes md order dependencies
-            if not o in data:  #table seen in md
-                logger.error('did not parse {} from md'.format(o))
-                return False
-            if not data[o]:  #data not empty
-                logger.error('empty values for {}'.format(o))
-                return False
-            if not select_loader(o, data, db):  #load it
-                return False
-    elif t == 'xlsx':
-        return
-    else:
-        logger.error('format {} not recognized'.format(t))
-        return False
+    for o in order:  #load based on order. removes md order dependencies
+        if not o in data:  #table seen in md
+            logger.error('did not parse {} from md'.format(o))
+            return False
+        if not data[o]:  #data not empty
+            logger.error('empty values for {}'.format(o))
+            return False
+        if not select_loader(o, data, db):  #load it
+            return False
     logger.info('comminting transactions...')
     db.commit()
     logger.info('commited successfully!')
