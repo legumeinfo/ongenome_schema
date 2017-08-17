@@ -24,7 +24,7 @@ Data loader for expression module OnGenome
 
 Supports loading of data from the datastore using annotation gff files.  The information in these and the associated README.KEY.md files is checked against the Chado database and the user is warned if the expected namespaces do not yeild keys from chado.  Please change the log level to Error if you do not want to see the Warning or Info messages.
 
-Datasets are loaded from either xlsx or md files.  Support currently only exists for md files as this is still in development.
+Datasets are loaded from either xlsx or md files.
 
 ''', formatter_class=argparse.RawTextHelpFormatter)
 
@@ -53,7 +53,7 @@ help='''Will drop the ongenome schema\n\n''')
 parser.add_argument('--load_schema', metavar = '<my_schema.sql>',
 help='''Will load the provided schema\n\n''')
 
-parser.add_argument('--counts', metavar = '<count_data.tab>',
+parser.add_argument('--counts', metavar = '<count_data.tsv>',
 help='''Count data tabular\n\n''')
 
 parser._optionals.title = "Program Options"
@@ -532,7 +532,7 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
             samples = line.split('\t')
             if not count:
                 for s in samples:
-                    if not s:
+                    if not s or s.lower() == 'geneid':
                         continue
                     if not s in expression:
                         logger.error('No sample information for {}'.format(

@@ -234,6 +234,9 @@ class OngenomeLoaders:
         if not data.get('datasetsource_id', None): #not null
             logger.error('datasetsource_id not found for dataset!  will not load!')
             cursor.close()
+        if not data.get('accession_no', None):
+            logger.error('accession_no not found for dataset!  will not load!')
+            cursor.close()
             return False
     #    (genome, annotation) = ('.'.join(data['genome'].split('.')[:3]),
     #                         data['genome'].split('.')[-1]) #isolate lookup values
@@ -264,8 +267,8 @@ class OngenomeLoaders:
         shortname = data.get('shortname', None)
         description = data.get('description', None)
         notes = data.get('notes', None)
-        check = '''select dataset_id from ongenome.dataset where shortname=%s'''
-        cursor.execute(check, [shortname])
+        check = '''select dataset_id from ongenome.dataset where accession_no=%s'''
+        cursor.execute(check, [accession_no])
         result = cursor.fetchone()
         if not result:
             logger.info('adding new dataset {}'.format(shortname))
