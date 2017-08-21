@@ -328,7 +328,7 @@ class OngenomeLoaders:
             sample_uniquename = s.get('sample_uniquename', None)
             key = s.get('key', None)
             expression = adata['expression'][key]
-            name = s.get('name', None)
+            name = s.get('sample_name', None)
             shortname = s.get('shortname', None)
             description = s.get('description', None)
             age = s.get('age', None)
@@ -338,11 +338,13 @@ class OngenomeLoaders:
             other_attributes = []
             ncbi_accessions = []
             for f in s:  #iterate through all fields and see if SRA, data or other
-                if (f != 'sample_uniquename' and f != 'name' and \
+                if (f != 'sample_uniquename' and f != 'sample_name' and \
                     f != 'shortname' and f != 'description' and \
                     f != 'age' and f != 'dev_stage' and \
                     f != 'plant_part' and f != 'treatment'):
-                    if f.lower().startswith('sra_'):
+                    if f.lower().startswith('sra_') or \
+                       f.lower() == 'bioproject_accession' or \
+                       f.lower() == 'biosample_accession':
                         ncbi_accessions.append('{}:{}'.format(f, s[f]))
                     else:
                         if f:
