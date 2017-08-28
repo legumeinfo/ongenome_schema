@@ -46,6 +46,19 @@ help='''Excell file of dataset (See Sudhansu for now)\n\n''')
 parser.add_argument('--genes', metavar = '<genes.json>',
 help='''Genes JSON dump from Chado as list\n\n''')
 
+parser.add_argument('--counts', metavar = '<count_data.tsv>',
+help='''Count data tabular\n\n''')
+
+parser.add_argument('--profile_neighbors', metavar = '<profile_neighbors.tsv>',
+help='''Tabular matrix of profile neighbor coorelations\n\n''')
+
+parser.add_argument('--dataset_accession', metavar = '<dataset.accession_no>',
+help='''Dataset accesion to use to assocaite neighbor data. Ex: cicar1\n\n''')
+
+parser.add_argument('--logger', metavar = '</path/to/log/my_log.txt>',
+help='''Provide the path and file for the logger.\n\n''', 
+default='./ongenome.log')
+
 parser.add_argument('--drop_schema',
 action='store_true',
 help='''Will drop the ongenome schema\n\n''')
@@ -53,19 +66,20 @@ help='''Will drop the ongenome schema\n\n''')
 parser.add_argument('--load_schema', metavar = '<my_schema.sql>',
 help='''Will load the provided schema\n\n''')
 
-parser.add_argument('--counts', metavar = '<count_data.tsv>',
-help='''Count data tabular\n\n''')
-
 parser._optionals.title = "Program Options"
 args = parser.parse_args()
 
 msg_format = '%(asctime)s|%(name)s|[%(levelname)s]: %(message)s'
 logging.basicConfig(format=msg_format, datefmt='%m-%d %H:%M',
                     level=logging.INFO)
-log_handler = logging.FileHandler(
-                       '/home/ccameron/ongenome/logs/ongenome_loader.log')
+#log_handler = logging.FileHandler(
+#                       '/home/ccameron/ongenome/logs/ongenome_loader.log')
+
+log_handler = logging.FileHandler(args.logger)
+
 formatter = logging.Formatter(msg_format)
 log_handler.setFormatter(formatter)
+
 logger = logging.getLogger('ongenome_loader')
 logger.addHandler(log_handler)
 
@@ -575,6 +589,61 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
     return True
 
 
+def neighbors_loader(neighbors, db, acc, threshold):
+    index = []
+    values = {}
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    query = '''select dataset_id from ongenome.dataset
+               where accession_no=%s'''
+    cursor.execute(query, [acc])
+    result = cursor.fetchone()
+    if not result:
+        logger.error('Dataset accession {} was not found in db').format(acc)
+        return False
+    did = result['dataset_id']
+    logger.info('Found PK:{} for dataset accession {}'.format(did, acc))
+    acc = '{}_test_profile_neighbors'.format(acc)  # REMOVE THIS LATER THIS IS FOR TESTING
+    with open(neighbors) as n:
+        for l in n:
+            if not l or l.isspace():
+                continue
+            l = l.rstrip()
+            fl = l.split('\t')
+            if len(fl) < 2:
+                logger.error('Less than 2 fields in neighbor file check tab')
+                return False
+            if not fl[0].replace('"', ''):
+                for i in fl[1:]:
+                    gene = i.replace('"', '')
+                    index.append(gene)
+                    query = '''select genemodel_id from ongenome.genemodel
+                               where genemodel_name=%s'''
+                    cursor.execute(query, [gene])
+                    result = cursor.fetchall()
+                    if not result:
+                        logger.error('Could not find genemodel {}'.format(gene))
+                        return False
+            else:
+                sample = fl[0].replace('"', '')
+                if sample in values:
+                    logger.error('already seen sample {}... Duplicate data').format(sample)
+                    return False
+                values[sample] = {}
+                v = values[sample]
+                for i,s in enumerate(fl[1:]):
+                    if s == 'NA':
+                        continue
+                    if abs(float(s)) >= threshold:
+                        v[index[i]] = s
+    if not loaders.load_neighbors(db, cursor, acc, values):
+        return False
+    return True
+#    for s in values:
+#        for v in values[s]:
+#            print '{}\t{}\t{}\t{}'.format(s, v, values[s][v], did)
+
+
+
 if __name__ == '__main__':
     db = connect_db()    #connect db
     orgs = args.organisms
@@ -585,6 +654,8 @@ if __name__ == '__main__':
     datasetmd = args.datasetmd
     datasetxlsx = args.datasetxlsx
     counts = args.counts
+    neighbors = args.profile_neighbors
+    accession = args.dataset_accession
 #    data = {'organism' : [], 'genome' : [], 'gene_models' : []}
     if args.drop_schema:
         if not drop_schema(db):
@@ -680,6 +751,19 @@ if __name__ == '__main__':
             sys.exit(1)
         if not dataset_loader(datasetxlsx, db, 'xlsx', counts):
             logger.error('Dataset loading failed for {}'.format(datasetxlsx))
+            db.close()
+            sys.exit(1)
+    if neighbors:
+        if not accession: #dataset accesion to lookup primary key with
+            logger.error('A Dataset accesion must be provided with neighbors')
+            db.close()
+            sys.exit(1)
+        if not check_file(neighbors):
+            logger.error('Could not find: {}'.format(datasetxlsx))
+            db.close()
+            sys.exit(1)
+        if not neighbors_loader(neighbors, db, accession, 0.7):
+            logger.error('Neighbors loading failed for {}'.format(neighbors))
             db.close()
             sys.exit(1)
     db.close()

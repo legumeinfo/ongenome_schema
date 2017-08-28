@@ -447,6 +447,27 @@ class OngenomeLoaders:
         cursor.close()
         return True
 
+    def load_neighbors(self, db, cursor, acc, data):
+        logger = self.logger
+        new_table = 'create table if not exists ongenome.{}'.format(acc)
+        # THIS IS DANGEROUS USUALLY BUT ARGUABLY SAFE HERE AS THE KEY IS REFERENCED AGAINST THE ACCESSION.  NEWER PSYCOPG2 ALLOWS FOR SQL METHOD WHICH COULD SOLVE THIS
+        new_table += """(
+                        profileneighbor_id bigserial primary key,
+                        genemodel_uniquename varchar(64) NOT NULL,
+                        target_uniquename varchar(64) NOT NULL,
+                        coorelation numeric(13,3) NOT NULL,
+                        dataset_id integer references 
+                         ongenome.dataset (dataset_id) NOT NULL
+                       )"""
+        try:
+            cursor.execute(new_table)
+            db.commit()
+        except psycopg2.Error as e:
+            logger.error('Could not add new table {}: {}'.format(acc, e))
+            return False
+        return True
+        
+
 
 if __name__ == '__main__':
     print "Class for OnGenome loaders, please import...\nexiting...\n"
