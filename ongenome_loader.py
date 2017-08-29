@@ -28,9 +28,6 @@ Datasets are loaded from either xlsx or md files.
 
 ''', formatter_class=argparse.RawTextHelpFormatter)
 
-parser.add_argument('--organisms', metavar = '<organisms.json>',
-help='''Organisms JSON dump from Chado as list\n\n''')
-
 parser.add_argument('--gff', metavar = '</path/to/my/datastore/organism/my_annotations.gff.gz>',
 help='''Annotation file for this organism\n\n''')
 
@@ -43,9 +40,6 @@ help='''Markdown file of dataset (See Sudhansu for now)\n\n''')
 parser.add_argument('--datasetxlsx', metavar = '<dataset.xlsx>',
 help='''Excell file of dataset (See Sudhansu for now)\n\n''')
 
-parser.add_argument('--genes', metavar = '<genes.json>',
-help='''Genes JSON dump from Chado as list\n\n''')
-
 parser.add_argument('--counts', metavar = '<count_data.tsv>',
 help='''Count data tabular\n\n''')
 
@@ -55,8 +49,8 @@ help='''Tabular matrix of profile neighbor coorelations\n\n''')
 parser.add_argument('--dataset_accession', metavar = '<dataset.accession_no>',
 help='''Dataset accesion to use to assocaite neighbor data. Ex: cicar1\n\n''')
 
-parser.add_argument('--logger', metavar = '</path/to/log/my_log.txt>',
-help='''Provide the path and file for the logger.\n\n''', 
+parser.add_argument('--logger', metavar = '</path/to/log/my_log.log>',
+help='''Provide the path and file for the logger Default: ./ongenome.log.\n\n''', 
 default='./ongenome.log')
 
 parser.add_argument('--drop_schema',
@@ -120,61 +114,6 @@ def check_dir(dir):
         logger.error('error occured on directory lookup: {}'.format(e))
         raise
     return b
-
-
-def load_organisms_json(organisms):
-    try: # Try to get JSON loaded into object
-        org_obj = json.load(open(organisms))
-    except ValueError:
-        logger.error('could not decode JSON file {}'.format(organisms))
-    if not isinstance(org_obj, list):
-        logger.error('JSON provided in organisms must be a list')
-        sys.exit(1)
-    for o in org_obj:
-        org_id = o.get('organism_id', None)
-        genus = o.get('genus', None)
-        species = o.get('species', None)
-        subspecies = o.get('subspecies', None)
-        cultivar_type = o.get('cultivar_type', None)
-        line = o.get('line', None)
-        abbrev = o.get('abbreviation', None)
-        common_name = o.get('common_name', None)
-        synonyms = o.get('synonyms', None)
-        description = o.get('comment', None)
-        notes = o.get('notes', None)
-        
-
-
-def load_genes_json(genes):
-    try: # Try to get JSON loaded into object
-        gene_obj = json.load(open(genes))
-    except ValueError:
-        logger.error('could not decode JSON file {}'.format(organisms))
-    if not isinstance(gene_obj, list):
-        logger.error('JSON provided in genes must be a list')
-        sys.exit(1)
-    for g in gene_obj:
-        print g
-
-
-def validate_dump(data, organisms, genes):
-    try: # Try to get JSON loaded into object
-        org_obj = json.load(open(organisms))
-    except ValueError:
-        sys.stderr.write('could not decode JSON file {}'.format(organisms))#log
-    try: # Try to get JSON loaded into object
-        gene_obj = json.load(open(genes))
-    except ValueError:
-        sys.stderr.write('could not decode JSON file {}'.format(genes)) #log
-    for o in org_obj: #set organism_ids to keys to check and merge genes
-        if o['organism_id'] in data['organisms']:
-            sys.stderr.write('duplicate {}'.format(o)) #log
-        data['organisms'][o['organism_id']] = o
-    for g in gene_obj: #set genes feature_id to key to setup load
-        if not g['organism_id'] in data['organisms']:
-            sys.stderr.write('could not find organism for {}'.format(g)) #log
-            sys.exit(1)
-        data['genes'][g['feature_id']] = g
 
 
 def drop_schema(db):
@@ -591,8 +530,12 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
 
 def neighbors_loader(neighbors, db, acc, threshold):
     index = []
+    id_lookup = {}
     values = {}
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if not loaders.safe_chars.match(acc) or not acc:
+        logger.error('Dataset accession can only ocntain alphanumeric chars and underscores not {}'.format(acc))
+        return False
     query = '''select dataset_id from ongenome.dataset
                where accession_no=%s'''
     cursor.execute(query, [acc])
@@ -602,7 +545,34 @@ def neighbors_loader(neighbors, db, acc, threshold):
         return False
     did = result['dataset_id']
     logger.info('Found PK:{} for dataset accession {}'.format(did, acc))
-    acc = '{}_test_profile_neighbors'.format(acc)  # REMOVE THIS LATER THIS IS FOR TESTING
+    acc = '{}_test_profile_neighbors'.format(acc)  # ADD REAL NAME LATER THIS IS FOR TESTING
+    check = '''select exists (select 1 from pg_tables where
+                schemaname=%s and tablename=%s)'''
+    cursor.execute(check, ['ongenome', acc])
+    result = cursor.fetchone()
+    if not result['exists']:
+        logger.info('Creating new table ongenome.{}'.format(acc))
+        new_table = 'create table ongenome.{}'.format(acc)
+# THIS IS DANGEROUS USUALLY BUT ARGUABLY SAFE HERE AS THE KEY IS REFERENCED AGAINST THE ACCESSION.  NEWER PSYCOPG2 ALLOWS FOR SQL METHOD WHICH COULD SOLVE THIS
+        new_table += """(
+                    profileneighbor_id bigserial primary key,
+                    genemodel_id integer NOT NULL,
+                    target_id integer NOT NULL,
+                    coorelation numeric(13,3) NOT NULL,
+                    dataset_id integer references
+                     ongenome.dataset (dataset_id) NOT NULL
+                                                                                                  )"""
+        try:
+            cursor.execute(new_table)
+            db.commit()
+        except psycopg2.Error as e:
+            logger.error('Could not add new table {}: {}'.format(acc, e))
+            cursor.close()
+            return False
+    else:
+        logger.error('Coorelation table ongenome.{} already exists!  Drop to remake'.format(acc))
+        return False
+    logger.info('Loading data matrix and writing temp file for bulk load...')
     with open(neighbors) as n:
         for l in n:
             if not l or l.isspace():
@@ -619,24 +589,79 @@ def neighbors_loader(neighbors, db, acc, threshold):
                     query = '''select genemodel_id from ongenome.genemodel
                                where genemodel_name=%s'''
                     cursor.execute(query, [gene])
-                    result = cursor.fetchall()
+                    result = cursor.fetchone()
                     if not result:
                         logger.error('Could not find genemodel {}'.format(gene))
                         return False
+                    if gene in id_lookup:
+                        logger.error('Duplicate gene in header {}'.format(gene))
+                        return False
+                    id_lookup[gene] = result['genemodel_id']
             else:
-                sample = fl[0].replace('"', '')
-                if sample in values:
-                    logger.error('already seen sample {}... Duplicate data').format(sample)
+                gene = fl[0].replace('"', '')
+                if not gene in id_lookup:
+                    logger.error('Gene {} not in header no db id'.format(gene))
                     return False
-                values[sample] = {}
-                v = values[sample]
+                gene = id_lookup[gene]
+                if gene in values:
+                    logger.error('Already seen gene {}... Duplicate data').format(gene)
+                    return False
+                values[gene] = {}
+                v = values[gene]
                 for i,s in enumerate(fl[1:]):
                     if s == 'NA':
                         continue
                     if abs(float(s)) >= threshold:
-                        v[index[i]] = s
-    if not loaders.load_neighbors(db, cursor, acc, values):
+                        if not index[i] in id_lookup:
+                            logger.error('No id for {}, check header'.format(index[i]))
+                            return False
+                        v[id_lookup[index[i]]] = s
+    temp_file = './temp_data.csv'
+    topen = open(temp_file, 'w')
+    for g in values:
+        for c in values[g]:
+            topen.write('{},{},{},{}\n'.format(g, c, values[g][c], did))
+    topen.close()
+    if not loaders.load_neighbors(db, cursor, did, acc, values, temp_file):
+        if loaders.remake_neighbor_index:
+            db.close()
+            db = connect_db()
+            logger.info('Remaking Neighbor Indexes...')
+            cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            remake_index = 'create index on ongenome.{} (dataset_id)'.format(
+                                                                         acc)
+            try:
+                cursor.execute(remake_index)
+            except psycopg2.Error as e:
+                logger.error('Could not remake dataset_id index: {}'.format(e))
+            remake_index = 'create index on ongenome.{} (genemodel_id)'.format(
+                                                                           acc)
+            try:
+                cursor.execute(remake_index)
+            except psycopg2.Error as e:
+                logger.error('Could not remake genemodel_id index: {}'.format(e)
+                            )
+            db.commit()
+            cursor.close()
         return False
+    if loaders.remake_neighbor_index:
+        logger.info('Remaking Neighbor Indexes...')
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        remake_index = 'create index on ongenome.{} (dataset_id)'.format(
+                                                                     acc)
+        try:
+            cursor.execute(remake_index)
+        except psycopg2.Error as e:
+            logger.error('Could not remake dataset_id index: {}'.format(e))
+        remake_index = 'create index on ongenome.{} (genemodel_id)'.format(
+                                                                       acc)
+        try:
+            cursor.execute(remake_index)
+        except psycopg2.Error as e:
+            logger.error('Could not remake genemodel_id index: {}'.format(e)
+                        )
+    db.commit()
+    cursor.close()
     return True
 #    for s in values:
 #        for v in values[s]:
@@ -646,8 +671,6 @@ def neighbors_loader(neighbors, db, acc, threshold):
 
 if __name__ == '__main__':
     db = connect_db()    #connect db
-    orgs = args.organisms
-    genes = args.genes
     org_gff = args.gff
     schema = args.load_schema
     org_list = args.gfflist
@@ -672,20 +695,6 @@ if __name__ == '__main__':
             logger.error('Could not load schema!')
             db.close()
             sys.exit(1)
-    if orgs:
-        if not check_file(orgs):
-            logger.error('Could not find: {}'.format(orgs))
-            db.close()
-            sys.exit(1)
-        logger.info('File {} found'.format(os.path.abspath(orgs)))
-        load_organisms_json(orgs)
-    if genes:
-        if not check_file(genes):
-            logger.error('Could not find: {}'.format(genes))
-            db.close()
-            sys.exit(1)
-        logger.info('File {} found'.format(os.path.abspath(genes)))
-        load_genes_json(genes)
     if org_gff:
         if not check_file(org_gff):
             logger.error('Could not find: {}'.format(org_gff))

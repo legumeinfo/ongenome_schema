@@ -20,6 +20,8 @@ class OngenomeLoaders:
             sys.stderr.write("logger must be provided")
             sys.exit(1)
         self.logger = logger
+        self.remake_neighbor_index = 0
+        self.safe_chars = re.compile('^[A-Za-z0-9_]+$')
 
     def load_organism(self, cursor, data):
         logger = self.logger
@@ -263,6 +265,9 @@ class OngenomeLoaders:
         datasetsource_id = data.get('datasetsource_id', None)
         method_id = data.get('method_id', None)
         accession_no = data.get('accession_no', None)
+        if not self.safe_chars.match(accession_no):
+            logger.error('Dataset accesion_no {} can only contain alphanumeric and underscores'.format(accession_no))
+            return False
         name = data.get('name', None)
         shortname = data.get('shortname', None)
         description = data.get('description', None)
@@ -447,26 +452,39 @@ class OngenomeLoaders:
         cursor.close()
         return True
 
-    def load_neighbors(self, db, cursor, acc, data):
+    def load_neighbors(self, db, cursor, did, acc, data, dfile):
         logger = self.logger
-        new_table = 'create table if not exists ongenome.{}'.format(acc)
-        # THIS IS DANGEROUS USUALLY BUT ARGUABLY SAFE HERE AS THE KEY IS REFERENCED AGAINST THE ACCESSION.  NEWER PSYCOPG2 ALLOWS FOR SQL METHOD WHICH COULD SOLVE THIS
-        new_table += """(
-                        profileneighbor_id bigserial primary key,
-                        genemodel_uniquename varchar(64) NOT NULL,
-                        target_uniquename varchar(64) NOT NULL,
-                        coorelation numeric(13,3) NOT NULL,
-                        dataset_id integer references 
-                         ongenome.dataset (dataset_id) NOT NULL
-                       )"""
+        drop_index = '''drop index if exists ongenome.{}_dataset_id_idx'''.format(acc)
         try:
-            cursor.execute(new_table)
-            db.commit()
+            logger.info('Dropping dataset_id index...')
+            cursor.execute(drop_index)
         except psycopg2.Error as e:
-            logger.error('Could not add new table {}: {}'.format(acc, e))
+            logger.error('Could not drop dataset_id index: {}'.format(e))
+            cursor.close()
+            return False
+        drop_index = '''drop index if exists ongenome.{}_genemodel_id_idx'''.format(acc)
+        try:
+            logger.info('Dropping genemodel_id index...')
+            cursor.execute(drop_index)
+        except psycopg2.Error as e:
+            logger.error('Could not drop genemodel_id index: {}'.format(e))
+            cursor.close()
+            return False
+        db.commit()
+        self.remake_neighbor_index = 1
+        logger.info('Bulk loading from {}...'.format(dfile))
+        dfile_obj = open(dfile)
+        try:
+            cursor.copy_from(dfile_obj, 'ongenome.{}'.format(acc), sep=',',
+                             columns=['genemodel_id', 'target_id', 
+                                      'coorelation', 'dataset_id']
+                            )
+            logger.info('Success! Bulk loaded {}'.format(dfile))
+        except psycopg2.Error as e:
+            logger.error('Could not bulk load: {}'.format(e))
+            cursor.close()
             return False
         return True
-        
 
 
 if __name__ == '__main__':
