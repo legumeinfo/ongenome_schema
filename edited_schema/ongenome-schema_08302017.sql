@@ -25,6 +25,42 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
+-- Name: cicar1_test_profile_neighbors; Type: TABLE; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE TABLE cicar1_test_profile_neighbors (
+    profileneighbor_id bigint NOT NULL,
+    genemodel_id integer NOT NULL,
+    target_id integer NOT NULL,
+    coorelation numeric(13,3) NOT NULL,
+    dataset_id integer NOT NULL
+);
+
+
+ALTER TABLE ongenome.cicar1_test_profile_neighbors OWNER TO www;
+
+--
+-- Name: cicar1_test_profile_neighbors_profileneighbor_id_seq; Type: SEQUENCE; Schema: ongenome; Owner: www
+--
+
+CREATE SEQUENCE cicar1_test_profile_neighbors_profileneighbor_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE ongenome.cicar1_test_profile_neighbors_profileneighbor_id_seq OWNER TO www;
+
+--
+-- Name: cicar1_test_profile_neighbors_profileneighbor_id_seq; Type: SEQUENCE OWNED BY; Schema: ongenome; Owner: www
+--
+
+ALTER SEQUENCE cicar1_test_profile_neighbors_profileneighbor_id_seq OWNED BY cicar1_test_profile_neighbors.profileneighbor_id;
+
+
+--
 -- Name: dataset; Type: TABLE; Schema: ongenome; Owner: www; Tablespace: 
 --
 
@@ -338,10 +374,10 @@ ALTER SEQUENCE organism_organism_id_seq OWNED BY organism.organism_id;
 
 
 --
--- Name: profileneighbors; Type: TABLE; Schema: ongenome; Owner: www; Tablespace: 
+-- Name: profileneighbors_cicar1; Type: TABLE; Schema: ongenome; Owner: www; Tablespace: 
 --
 
-CREATE TABLE profileneighbors (
+CREATE TABLE profileneighbors_cicar1 (
     profileneighbors_id integer NOT NULL,
     genemodel_uniquename character varying(64),
     dataset_id integer,
@@ -349,7 +385,42 @@ CREATE TABLE profileneighbors (
 );
 
 
-ALTER TABLE ongenome.profileneighbors OWNER TO www;
+ALTER TABLE ongenome.profileneighbors_cicar1 OWNER TO www;
+
+--
+-- Name: profileneighbors_phavu1; Type: TABLE; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE TABLE profileneighbors_phavu1 (
+    profileneighbors_id integer NOT NULL,
+    genemodel_uniquename character varying(64),
+    dataset_id integer,
+    profile_neighbors text
+);
+
+
+ALTER TABLE ongenome.profileneighbors_phavu1 OWNER TO www;
+
+--
+-- Name: profileneighbors_phavu1_profileneighbors_id_seq; Type: SEQUENCE; Schema: ongenome; Owner: www
+--
+
+CREATE SEQUENCE profileneighbors_phavu1_profileneighbors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE ongenome.profileneighbors_phavu1_profileneighbors_id_seq OWNER TO www;
+
+--
+-- Name: profileneighbors_phavu1_profileneighbors_id_seq; Type: SEQUENCE OWNED BY; Schema: ongenome; Owner: www
+--
+
+ALTER SEQUENCE profileneighbors_phavu1_profileneighbors_id_seq OWNED BY profileneighbors_phavu1.profileneighbors_id;
+
 
 --
 -- Name: profileneighbors_profileneighbors_id_seq; Type: SEQUENCE; Schema: ongenome; Owner: www
@@ -369,7 +440,7 @@ ALTER TABLE ongenome.profileneighbors_profileneighbors_id_seq OWNER TO www;
 -- Name: profileneighbors_profileneighbors_id_seq; Type: SEQUENCE OWNED BY; Schema: ongenome; Owner: www
 --
 
-ALTER SEQUENCE profileneighbors_profileneighbors_id_seq OWNED BY profileneighbors.profileneighbors_id;
+ALTER SEQUENCE profileneighbors_profileneighbors_id_seq OWNED BY profileneighbors_cicar1.profileneighbors_id;
 
 
 --
@@ -452,6 +523,13 @@ ALTER SEQUENCE treatment_treatment_id_seq OWNED BY treatment.treatment_id;
 
 
 --
+-- Name: profileneighbor_id; Type: DEFAULT; Schema: ongenome; Owner: www
+--
+
+ALTER TABLE ONLY cicar1_test_profile_neighbors ALTER COLUMN profileneighbor_id SET DEFAULT nextval('cicar1_test_profile_neighbors_profileneighbor_id_seq'::regclass);
+
+
+--
 -- Name: dataset_id; Type: DEFAULT; Schema: ongenome; Owner: www
 --
 
@@ -511,7 +589,14 @@ ALTER TABLE ONLY organism ALTER COLUMN organism_id SET DEFAULT nextval('organism
 -- Name: profileneighbors_id; Type: DEFAULT; Schema: ongenome; Owner: www
 --
 
-ALTER TABLE ONLY profileneighbors ALTER COLUMN profileneighbors_id SET DEFAULT nextval('profileneighbors_profileneighbors_id_seq'::regclass);
+ALTER TABLE ONLY profileneighbors_cicar1 ALTER COLUMN profileneighbors_id SET DEFAULT nextval('profileneighbors_profileneighbors_id_seq'::regclass);
+
+
+--
+-- Name: profileneighbors_id; Type: DEFAULT; Schema: ongenome; Owner: www
+--
+
+ALTER TABLE ONLY profileneighbors_phavu1 ALTER COLUMN profileneighbors_id SET DEFAULT nextval('profileneighbors_phavu1_profileneighbors_id_seq'::regclass);
 
 
 --
@@ -526,6 +611,14 @@ ALTER TABLE ONLY sample ALTER COLUMN sample_id SET DEFAULT nextval('sample_sampl
 --
 
 ALTER TABLE ONLY treatment ALTER COLUMN treatment_id SET DEFAULT nextval('treatment_treatment_id_seq'::regclass);
+
+
+--
+-- Name: cicar1_test_profile_neighbors_pkey; Type: CONSTRAINT; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+ALTER TABLE ONLY cicar1_test_profile_neighbors
+    ADD CONSTRAINT cicar1_test_profile_neighbors_pkey PRIMARY KEY (profileneighbor_id);
 
 
 --
@@ -593,6 +686,14 @@ ALTER TABLE ONLY organism
 
 
 --
+-- Name: profileneighbors_phavu1_pkey; Type: CONSTRAINT; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+ALTER TABLE ONLY profileneighbors_phavu1
+    ADD CONSTRAINT profileneighbors_phavu1_pkey PRIMARY KEY (profileneighbors_id);
+
+
+--
 -- Name: sample_pkey; Type: CONSTRAINT; Schema: ongenome; Owner: www; Tablespace: 
 --
 
@@ -606,6 +707,20 @@ ALTER TABLE ONLY sample
 
 ALTER TABLE ONLY treatment
     ADD CONSTRAINT treatment_pkey PRIMARY KEY (treatment_id);
+
+
+--
+-- Name: cicar1_test_profile_neighbors_dataset_id_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE INDEX cicar1_test_profile_neighbors_dataset_id_idx ON cicar1_test_profile_neighbors USING btree (dataset_id);
+
+
+--
+-- Name: cicar1_test_profile_neighbors_genemodel_id_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE INDEX cicar1_test_profile_neighbors_genemodel_id_idx ON cicar1_test_profile_neighbors USING btree (genemodel_id);
 
 
 --
@@ -665,17 +780,31 @@ CREATE INDEX datasetsource_shortname_idx1 ON datasetsource USING btree (shortnam
 
 
 --
+-- Name: expressiondata_dataset_id_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE INDEX expressiondata_dataset_id_idx ON expressiondata USING btree (dataset_id);
+
+
+--
+-- Name: expressiondata_dataset_sample_id_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE INDEX expressiondata_dataset_sample_id_idx ON expressiondata USING btree (dataset_sample_id);
+
+
+--
+-- Name: expressiondata_genemodel_id_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE INDEX expressiondata_genemodel_id_idx ON expressiondata USING btree (genemodel_id);
+
+
+--
 -- Name: genemodel_genemodel_name_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
 --
 
 CREATE INDEX genemodel_genemodel_name_idx ON genemodel USING btree (genemodel_name);
-
-
---
--- Name: genemodel_genemodel_name_idx1; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
---
-
-CREATE INDEX genemodel_genemodel_name_idx1 ON genemodel USING btree (genemodel_name);
 
 
 --
@@ -763,6 +892,13 @@ CREATE INDEX organism_name_idx1 ON organism USING btree (name);
 
 
 --
+-- Name: profileneighbors_phavu1_genemodel_uniquename_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
+--
+
+CREATE UNIQUE INDEX profileneighbors_phavu1_genemodel_uniquename_idx ON profileneighbors_phavu1 USING btree (genemodel_uniquename);
+
+
+--
 -- Name: sample_sample_uniquename_idx; Type: INDEX; Schema: ongenome; Owner: www; Tablespace: 
 --
 
@@ -774,6 +910,14 @@ CREATE INDEX sample_sample_uniquename_idx ON sample USING btree (sample_uniquena
 --
 
 CREATE INDEX sample_sample_uniquename_idx1 ON sample USING btree (sample_uniquename);
+
+
+--
+-- Name: cicar1_test_profile_neighbors_dataset_id_fkey; Type: FK CONSTRAINT; Schema: ongenome; Owner: www
+--
+
+ALTER TABLE ONLY cicar1_test_profile_neighbors
+    ADD CONSTRAINT cicar1_test_profile_neighbors_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES dataset(dataset_id);
 
 
 --
@@ -870,6 +1014,26 @@ ALTER TABLE ONLY sample
 
 ALTER TABLE ONLY treatment
     ADD CONSTRAINT treatment_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES dataset(dataset_id);
+
+
+--
+-- Name: cicar1_test_profile_neighbors; Type: ACL; Schema: ongenome; Owner: www
+--
+
+REVOKE ALL ON TABLE cicar1_test_profile_neighbors FROM PUBLIC;
+REVOKE ALL ON TABLE cicar1_test_profile_neighbors FROM www;
+GRANT ALL ON TABLE cicar1_test_profile_neighbors TO www;
+GRANT ALL ON TABLE cicar1_test_profile_neighbors TO staff;
+
+
+--
+-- Name: cicar1_test_profile_neighbors_profileneighbor_id_seq; Type: ACL; Schema: ongenome; Owner: www
+--
+
+REVOKE ALL ON SEQUENCE cicar1_test_profile_neighbors_profileneighbor_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE cicar1_test_profile_neighbors_profileneighbor_id_seq FROM www;
+GRANT ALL ON SEQUENCE cicar1_test_profile_neighbors_profileneighbor_id_seq TO www;
+GRANT ALL ON SEQUENCE cicar1_test_profile_neighbors_profileneighbor_id_seq TO staff;
 
 
 --
@@ -1033,13 +1197,33 @@ GRANT ALL ON SEQUENCE organism_organism_id_seq TO staff;
 
 
 --
--- Name: profileneighbors; Type: ACL; Schema: ongenome; Owner: www
+-- Name: profileneighbors_cicar1; Type: ACL; Schema: ongenome; Owner: www
 --
 
-REVOKE ALL ON TABLE profileneighbors FROM PUBLIC;
-REVOKE ALL ON TABLE profileneighbors FROM www;
-GRANT ALL ON TABLE profileneighbors TO www;
-GRANT ALL ON TABLE profileneighbors TO staff;
+REVOKE ALL ON TABLE profileneighbors_cicar1 FROM PUBLIC;
+REVOKE ALL ON TABLE profileneighbors_cicar1 FROM www;
+GRANT ALL ON TABLE profileneighbors_cicar1 TO www;
+GRANT ALL ON TABLE profileneighbors_cicar1 TO staff;
+
+
+--
+-- Name: profileneighbors_phavu1; Type: ACL; Schema: ongenome; Owner: www
+--
+
+REVOKE ALL ON TABLE profileneighbors_phavu1 FROM PUBLIC;
+REVOKE ALL ON TABLE profileneighbors_phavu1 FROM www;
+GRANT ALL ON TABLE profileneighbors_phavu1 TO www;
+GRANT ALL ON TABLE profileneighbors_phavu1 TO staff;
+
+
+--
+-- Name: profileneighbors_phavu1_profileneighbors_id_seq; Type: ACL; Schema: ongenome; Owner: www
+--
+
+REVOKE ALL ON SEQUENCE profileneighbors_phavu1_profileneighbors_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE profileneighbors_phavu1_profileneighbors_id_seq FROM www;
+GRANT ALL ON SEQUENCE profileneighbors_phavu1_profileneighbors_id_seq TO www;
+GRANT ALL ON SEQUENCE profileneighbors_phavu1_profileneighbors_id_seq TO staff;
 
 
 --
