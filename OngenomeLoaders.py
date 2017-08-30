@@ -21,6 +21,7 @@ class OngenomeLoaders:
             sys.exit(1)
         self.logger = logger
         self.remake_neighbor_index = 0
+        self.remake_expression_index = 0
         self.safe_chars = re.compile('^[A-Za-z0-9_]+$')
 
     def load_organism(self, cursor, data):

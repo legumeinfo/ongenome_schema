@@ -130,6 +130,35 @@ def drop_schema(db):
     return True
 
 
+def make_expression_indexes(db):
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    make_dataset_id = 'create index on ongenome.expressiondata (dataset_id)'
+    make_dataset_sample_id = '''create index on 
+                                ongenome.expressiondata (dataset_sample_id)'''
+    make_genemodel_id = '''create index on 
+                                ongenome.expressiondata (genemodel_id)'''
+    try:
+        cursor.execute(make_dataset_id)
+    except psycopg2.Error as e:
+        logger.error('could not remake index on dataset_id: {}'.format(e))
+        cursor.close()
+        return False
+    try:
+        cursor.execute(make_dataset_sample_id)
+    except psycopg2.Error as e:
+        logger.error('could not remake index on dataset_sample_id: {}'.format(e)
+                    )
+        cursor.close()
+        return False
+    try:
+        cursor.execute(make_genemodel_id)
+    except psycopg2.Error as e:
+        logger.error('could not remake index on genemodel_id: {}'.format(e))
+        cursor.close()
+        return False
+    db.commit()
+
+
 def load_schema(db, schema):
     logger.info('Loading schema')
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -365,8 +394,40 @@ def select_loader(table, data, db):
         logger.info('loading sample')
         cursor = db.cursor(
             cursor_factory=psycopg2.extras.RealDictCursor)
-        if not loaders.load_sample(data[table], cursor, data):
+
+        logger.info('Dropping Expression Indexes to Improve Speed...')
+        db_drop = connect_db()
+        cur_drop = db_drop.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        drop_dataset_id = '''drop index if exists 
+                             ongenome.expressiondata_dataset_id_idx'''
+        drop_dataset_sample_id = '''drop index if exists 
+                                ongenome.expressiondata_dataset_sample_id_idx'''
+        drop_genemodel_id = '''drop index if exists 
+                                 ongenome.expressiondata_genemodel_id_idx'''
+        try:
+            cur_drop.execute(drop_dataset_id)
+        except psycopg2.Error as e:
+            logger.error('Error occured on expression dataset_id drop: {}'.format(e))
             return False
+        try:
+            cur_drop.execute(drop_dataset_sample_id)
+        except psycopg2.Error as e:
+            logger.error('Error occured on expression dataset_sample_id drop: {}'.format(e))
+            return False
+        try:
+            cur_drop.execute(drop_genemodel_id)
+        except psycopg2.Error as e:
+            logger.error('Error occured on expression genemodel_id drop: {}'.format(e))
+            return False
+        db_drop.commit()
+        if not loaders.load_sample(data[table], cursor, data):
+            logger.info('Remaking Expression Indexes...')
+            make_expression_indexes(db_drop)
+            db_drop.close()
+            return False
+        logger.info('Remaking Expression Indexes...')
+        make_expression_indexes(db_drop)
+        db_drop.close()
     elif table == 'treatment':
         logger.info('loading treatment')
         cursor = db.cursor(
@@ -474,6 +535,7 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
         logger.error('format {} not recognized'.format(t))
         return False
     logger.info('parsing counts data in {}...'.format(counts))
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     with open(counts) as copen:
         count = 0
         s_list = []
@@ -493,9 +555,6 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
                         return False
                 s_list = samples[1:]
             else:
-                cursor = db.cursor(
-                            cursor_factory=psycopg2.extras.RealDictCursor
-                         )
                 get_model_id = '''select genemodel_id from 
                                   ongenome.genemodel where
                                   genemodel_name=%s'''
