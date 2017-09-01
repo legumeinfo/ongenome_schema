@@ -92,12 +92,13 @@ Program Options:
 2. Load a Dataset and Counts Information  
    ```
    python ongenome_loader.py --datasetxlsx /usr/local/www/data/private/Cicer_arietinum/expression_datasets/cicar-SRP017394-atlas-on-ICC4958_DataStoreFormat.xlsx --counts /usr/local/www/data/private/Cicer_arietinum/expression_datasets/cicar-SRP017394-on-ICC4958.gnm2.ann1_combinedSamplesTpm_uniquenameGene.tsv
-   ```  
+   ```
    This will load datasetsource, dataset, sample, method and expression
 
 3.  Load Profile Neighbors  
    ```
    python ongenome_loader.py --profile_neighbors /home/ccameron/ongenome/ongenome_schema/cor_matrix_df_rounded_corrected_names.tsv --dataset_accession cicar1
    ```
+   This will create a new co-expression coorelations table for dataset cicar1
 
 
