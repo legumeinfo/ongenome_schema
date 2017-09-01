@@ -24,7 +24,8 @@
 
 5. Dataset Accession Loaded from Dataset
 
-   The dataset accession loaded in the dataset step.  
+   This must be provided with Profile Neighbors Matrix.
+   The dataset accession loaded in the dataset step, ex. cicar1  
    This must match a dataset.accesion_no in the database.  
    The dataset accession_no must start with a letter and contain only A-z0-9.
 
