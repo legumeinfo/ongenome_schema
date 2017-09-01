@@ -96,7 +96,7 @@ Program Options:
    ```
    This will load datasetsource, dataset, sample, method and expression
 
-3.  Load Profile Neighbors  
+3. Load Profile Neighbors  
    ```
    python ongenome_loader.py --profile_neighbors /home/ccameron/ongenome/ongenome_schema/cor_matrix_df_rounded_corrected_names.tsv --dataset_accession cicar1
    ```
