@@ -540,7 +540,6 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
     else:
         logger.error('format {} not recognized'.format(t))
         return False
-    data['dataset']['genome'] = 'cajca.' + data['dataset']['genome']
     logger.info('parsing counts data in {}...'.format(counts))
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     with open(counts) as copen:
