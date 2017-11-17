@@ -345,6 +345,7 @@ class OngenomeLoaders:
             treatment = s.get('treatment', None)
             other_attributes = []
             ncbi_accessions = []
+            sample_id = ''
             for f in s:  #iterate through all fields and see if SRA, data or other
                 if (f != 'sample_uniquename' and f != 'sample_name' and \
                     f != 'shortname' and f != 'description' and \
@@ -366,7 +367,7 @@ class OngenomeLoaders:
             check = '''select sample_id from ongenome.sample where
                        sample_uniquename=%s''' # check for existence
             cursor.execute(check, [sample_uniquename])
-            result = cursor.fetchall()
+            result = cursor.fetchone()
             if not result:  #if not exists load it
                 logger.info('inserting new sample {}'.format(sample_uniquename))
                 insert = '''insert into ongenome.sample
@@ -389,60 +390,6 @@ class OngenomeLoaders:
                         logger.error('could not retrieve sample id... odd...')
                         cursor.close()
                         return False
-                    check = '''select dataset_sample_id from
-                               ongenome.dataset_sample
-                               where
-                               dataset_id=%s and sample_id=%s'''
-                    cursor.execute(check, [dataset_id, sample_id])  #check
-                    result = cursor.fetchall()
-                    if not result:  #if not exists load it
-                        insert = '''insert into ongenome.dataset_sample
-                                    (dataset_id, sample_id)
-                                    values
-                                    (%s, %s) returning dataset_sample_id'''
-                        try:
-                            logger.info('inserting dataset_sample')
-                            cursor.execute(insert, [dataset_id, sample_id])
-                            result = cursor.fetchone()
-                            dataset_sample_id = result['dataset_sample_id']
-                            exp_value_type = None
-                            for e in expression:
-    #                            check = '''select expressiondata_id from
-    #                                       ongenome.expressiondata where
-    #                                       dataset_sample_id=%s and dataset_id=%s
-    #                                       and genemodel_id=%s
-    #                                    '''
-    #                            cursor.execute(check, [dataset_sample_id,
-    #                                                   dataset_id,
-    #                                                   e])
-    #                            result = cursor.fetchall()
-                                result = []
-                                if not result:
-                                    logger.info('inserting expressiondata for sample {}: {} {} {} with value {}'.format(sample_uniquename, e, dataset_id, dataset_sample_id, expression[e]))
-
-                                    insert = '''insert into ongenome.expressiondata
-                                            (genemodel_id, dataset_id,
-                                             dataset_sample_id, exp_value_type,
-                                             exp_value) values
-                                             (%s, %s, %s, %s, %s)'''
-                                    try:
-                                        cursor.execute(insert, [e, dataset_id,
-                                                            dataset_sample_id,
-                                                            exp_value_type,
-                                                            expression[e]])
-                                    except psycopg2.Error as e:
-                                        logger.error('expression insert failed {}!'.format(e))
-                                        cursor.close()
-                                        return False
-                                else:
-                                    logger.warning('expressiondata {} {} {} with value {} already exists in db'.format(e, dataset_id, dataset_sample_id, expression[e]))
-                        except psycopg2.Error as e:
-                            logger.error('could not insert dataset_sample: {}'.format(e))
-                            cursor.close()
-                            return False
-                        logger.info('dataset_sample added successfully')
-                    else:
-                        logger.warning('dataset_sample already exists in db')
                 except psycopg2.Error as e:
                     logger.error('could not insert sample: {}'.format(e))
                     cursor.close()
@@ -451,7 +398,67 @@ class OngenomeLoaders:
                                                             sample_uniquename))
             else:
                 logger.warning('sample {} already exists in db'.format(
-                                                                sample_uniquename))
+                                                            sample_uniquename))
+                sample_id = result['sample_id']
+            if not (sample_id and dataset_id):
+                logger.error('sample_id null, will not laod datasetsample')
+                return False
+            check = '''select dataset_sample_id from
+                       ongenome.dataset_sample
+                       where
+                       dataset_id=%s and sample_id=%s'''
+            cursor.execute(check, [dataset_id, sample_id])  #check
+            result = cursor.fetchall()
+            if not result:  #if not exists load it
+                insert = '''insert into ongenome.dataset_sample
+                            (dataset_id, sample_id)
+                            values
+                            (%s, %s) returning dataset_sample_id'''
+                try:
+                    logger.info('inserting dataset_sample')
+                    cursor.execute(insert, [dataset_id, sample_id])
+                    result = cursor.fetchone()
+                    dataset_sample_id = result['dataset_sample_id']
+                    exp_value_type = None
+                    for e in expression:
+#                            check = '''select expressiondata_id from
+#                                       ongenome.expressiondata where
+#                                       dataset_sample_id=%s and dataset_id=%s
+#                                       and genemodel_id=%s
+#                                    '''
+#                            cursor.execute(check, [dataset_sample_id,
+#                                                   dataset_id,
+#                                                   e])
+#                            result = cursor.fetchall()
+                        result = []
+                        if not result:
+                            logger.info('inserting expressiondata for sample {}: {} {} {} with value {}'.format(sample_uniquename, e, dataset_id, dataset_sample_id, expression[e]))
+
+                            insert = '''insert into ongenome.expressiondata
+                                    (genemodel_id, dataset_id,
+                                     dataset_sample_id, exp_value_type,
+                                     exp_value) values
+                                     (%s, %s, %s, %s, %s)'''
+                            try:
+                                cursor.execute(insert, [e, dataset_id,
+                                                    dataset_sample_id,
+                                                    exp_value_type,
+                                                    expression[e]])
+                            except psycopg2.Error as e:
+                                logger.error('expression insert failed {}!'.format(e))
+                                cursor.close()
+                                return False
+                        else:
+                            logger.warning('expressiondata {} {} {} with value {} already exists in db'.format(e, dataset_id, dataset_sample_id, expression[e]))
+                except psycopg2.Error as e:
+                    logger.error('could not insert dataset_sample: {}'.format(e))
+                    cursor.close()
+                    return False
+                logger.info('dataset_sample added successfully')
+            else:
+                logger.warning(('dataset_sample for sample_id and dataset_id '+ 
+                                '{}, {} already exists in db'.format(sample_id,
+                                                                dataset_id)))
         cursor.close()
         return True
 
