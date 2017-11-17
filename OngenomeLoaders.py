@@ -119,10 +119,11 @@ class OngenomeLoaders:
             try:
                 cursor.execute(insert, params)
             except psycopg2.Error as e:
-                logger.error('Could not insert genome {}: {}'.format(
-                                                                 data['name'],
-                                                                 e)
+                logger.error('Could not insert genome_model {}: {}'.format(
+                                                        data['genemodel_name'],
+                                                        e)
                             )
+                return False
         return True
 
     def load_datasetsource(self, data, cursor, adata):
@@ -237,6 +238,7 @@ class OngenomeLoaders:
         if not data.get('datasetsource_id', None): #not null
             logger.error('datasetsource_id not found for dataset!  will not load!')
             cursor.close()
+            return False
         if not data.get('accession_no', None):
             logger.error('accession_no not found for dataset!  will not load!')
             cursor.close()

@@ -194,7 +194,7 @@ def organism_loader(annotation, db):
     sci_error = 'Complete scientific name not found for: {}'.format(readme)
     abr_error = 'Scientific abbreviation not found for: {}'.format(readme)
     if not check_file(readme):
-        logger.error('Could not find: {}'.format(orgs))
+        logger.error('Could not find: {}'.format(readme))
         return False
     logger.info('README {} found'.format(readme))
     #if len(annotation) > 1:
@@ -239,6 +239,12 @@ def organism_loader(annotation, db):
                     abr = line
                     odata['abbrev'] = abr
                     aswitch = 0
+    if not (odata['abbrev'] and odata['species'] and odata['genus']):
+        logger.error(('Abbreviation, genus, or species is None: '+
+                      '{}, {}, {}'.format(odata['abbrev'], 
+                                          odata['species'], 
+                                          odata['genus'])))
+        return False
     odata['name'] = '{}.{}'.format(odata['abbrev'], source)
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     #BETTER QUERY NEED TO TALK ABOUT ABBREVIATIONS
@@ -534,6 +540,7 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
     else:
         logger.error('format {} not recognized'.format(t))
         return False
+    data['dataset']['genome'] = 'cajca.' + data['dataset']['genome']
     logger.info('parsing counts data in {}...'.format(counts))
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     with open(counts) as copen:
