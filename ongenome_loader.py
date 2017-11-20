@@ -245,7 +245,8 @@ def organism_loader(annotation, db):
                                           odata['species'], 
                                           odata['genus'])))
         return False
-    odata['name'] = '{}.{}'.format(odata['abbrev'], source)
+    odata['name'] = odata['abbrev']
+    odata['abbrev'] = odata['abbrev'].split('.')[0]
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     #BETTER QUERY NEED TO TALK ABOUT ABBREVIATIONS
     #query = '''select organism_id, common_name from chado.organism 
