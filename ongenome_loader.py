@@ -245,7 +245,8 @@ def organism_loader(annotation, db):
                                           odata['species'], 
                                           odata['genus'])))
         return False
-    odata['name'] = '{}.{}'.format(odata['abbrev'], source)
+    odata['name'] = odata['abbrev']
+    odata['abbrev'] = odata['abbrev'].split('.')[0]
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     #BETTER QUERY NEED TO TALK ABOUT ABBREVIATIONS
     #query = '''select organism_id, common_name from chado.organism 
@@ -266,9 +267,15 @@ def organism_loader(annotation, db):
     cursor.execute(query, args)
     result = cursor.fetchall();
     if not result:
-        logger.warning('could not find chado entry for {}'.format(readme))
+        #logger.warning('could not find chado entry for {}'.format(readme))
+        logger.error('could not find chado entry for {}'.format(
+                                                           odata['name']))
+        return False
     elif len(result) > 1:
-        logger.warning('found multiple chado entries for {}'.format(readme))
+        #logger.warning('found multiple chado entries for {}'.format(readme))
+        logger.error('found multiple chado entries for {}'.format(
+                                                               odata['name']))
+        return False
     else:
         logger.info('found chado organism_id={} and common_name={}'.format(
                                                       result[0]['organism_id'],
@@ -292,9 +299,13 @@ def organism_loader(annotation, db):
     cursor.execute(query, [chado_name])
     result = cursor.fetchall();
     if not result:
-        logger.warning('could not find chado entry for {}'.format(chado_name))
+        #logger.warning('could not find chado entry for {}'.format(chado_name))
+        logger.error('could not find chado entry for {}'.format(chado_name))
+        return False
     elif len(result) > 1:
-        logger.warning('found multiple chado entries for {}'.format(chado_name))
+        #logger.warning('found multiple chado entries for {}'.format(chado_name))
+        logger.error('multiple chado entries for {}'.format(chado_name))
+        return False
     else:
         aid = int(result[0]['analysis_id'])
         logger.info('found chado analysis_id={} for genome={}'.format(
@@ -355,11 +366,17 @@ def organism_loader(annotation, db):
                 cursor.execute(query, [gid])
                 result = cursor.fetchall()
                 if not result:
-                    logger.warning('could not find chado entry for {}'.format(
+                    #logger.warning('could not find chado entry for {}'.format(
+                    #                                                     gid))
+                    logger.error('could not find chado entry for {}'.format(
                                                                          gid))
+                    return False
                 elif len(result) > 1:
-                    logger.warning('found multiple chado entries for {}'.format(
+                    #logger.warning('found multiple chado entries for {}'.format(
+                    #                                                       gid))
+                    logger.error('found multiple chado entries for {}'.format(
                                                                            gid))
+                    return False
                 else:
                     logger.info('found chado uniquename={}'.format(gid))
                     gmdata['chado_uniquename'] = gid
