@@ -443,14 +443,10 @@ def select_loader(table, data, db):
             logger.error('Error occured on expression genemodel_id drop: {}'.format(e))
             return False
         db_drop.commit()
-        if not loaders.load_sample(data[table], cursor, data):
-            logger.info('Remaking Expression Indexes...')
-            make_expression_indexes(db_drop)
-            db_drop.close()
-            return False
-        logger.info('Remaking Expression Indexes...')
-        make_expression_indexes(db_drop)
         db_drop.close()
+        loaders.remake_expression_indexes = 1
+        if not loaders.load_sample(data[table], cursor, data):
+            return False
     elif table == 'treatment':
         logger.info('loading treatment')
         cursor = db.cursor(
@@ -606,6 +602,9 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
             return False
     logger.info('comminting transactions...')
     db.commit()
+    if loaders.remake_expression_indexes:
+        logger.info('Remaking Expression Indexes...')
+        make_expression_indexes(db)
     logger.info('commited successfully!')
     return True
 
