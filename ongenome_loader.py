@@ -173,38 +173,11 @@ def load_schema(db, schema):
     return True
 
 
-def organism_loader(annotation, db):
-    odata = {
-              'chado_organism_id' : None, 'genus' : None,
-              'species' : None, 'subspecies' : None,
-              'cultivar_type' : None, 'line' : None,
-              'abbrev' : None, 'common_name' : None,
-              'synonyms' : None, 'description' : None,
-              'notes' : None, 'name' : None
-             }
-    directory = os.path.dirname(os.path.abspath(annotation))
+def parse_readme(readme, odata):
     sci_name = '#### Scientific Name'
     sci_name_abr = '#### Scientific Name Abbrev'
-    readme_key = directory.split('.')[-1] #get key
-    source = directory.split('/')[-1].split('.')[0] #get source genome
-    buildv = directory.split('/')[-1].split('.')[1] #get build version
-    annov = directory.split('/')[-1].split('.')[2]  #get annotation version
-    readme = '{}/README.{}.md'.format(directory, readme_key)
-#    anno_glob = '{}/*.gene_models.gff3.gz'.format(directory)
     sci_error = 'Complete scientific name not found for: {}'.format(readme)
     abr_error = 'Scientific abbreviation not found for: {}'.format(readme)
-    if not check_file(readme):
-        logger.error('Could not find: {}'.format(readme))
-        return False
-    logger.info('README {} found'.format(readme))
-    #if len(annotation) > 1:
-    #    logger.error('found too many gene_model files: {}'.format(annotation))
-    #    return False
-    #annotation = annotation[0]
-    #if not check_file(annotation):
-    #    logger.error('Could not find: {}'.format(annotation))
-    #    return False
-    #logger.info('Annotation file {} found'.format(annotation))
     count = 0
     sswitch = 0
     aswitch = 0
@@ -222,15 +195,13 @@ def organism_loader(annotation, db):
                 aswitch = 1
                 continue
             count += 1
-            if count%2 == 0:
+            if count%2 == 0: #readmes must have comment lines
                 if sswitch:
                     if not len(line.split(' ')) >= 2:
                         logger.error(sci_error)
                         return False
-                    genus = line.split(' ')[0]
-                    species = line.split(' ')[1]
-                    odata['species'] = species
-                    odata['genus'] = genus
+                    odata['genus'] = line.split(' ')[0] #genus
+                    odata['species'] = line.split(' ')[1] #species
                     sswitch = 0
                 if aswitch:
                     if not line:
@@ -239,16 +210,11 @@ def organism_loader(annotation, db):
                     abr = line
                     odata['abbrev'] = abr
                     aswitch = 0
-    if not (odata['abbrev'] and odata['species'] and odata['genus']):
-        logger.error(('Abbreviation, genus, or species is None: '+
-                      '{}, {}, {}'.format(odata['abbrev'], 
-                                          odata['species'], 
-                                          odata['genus'])))
-        return False
-    odata['name'] = odata['abbrev']
-    odata['abbrev'] = odata['abbrev'].split('.')[0]
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    #BETTER QUERY NEED TO TALK ABOUT ABBREVIATIONS
+    return True
+
+
+def get_chado_organism(cursor, odata):
+#BETTER QUERY NEED TO TALK ABOUT ABBREVIATIONS
     #query = '''select organism_id, common_name from chado.organism 
     #           where species=%s and genus=%s and abbreviation=%s'''
 #    query = '''select organism_id, common_name from chado.organism 
@@ -284,16 +250,10 @@ def organism_loader(annotation, db):
                    )
         odata['common_name'] = result[0]['common_name']
         odata['chado_organism_id'] = int(result[0]['organism_id'])
-    #LOAD ORGANISM DATA load_organism(cursor, odata)
-    if not loaders.load_organism(cursor, odata):
-        return False
-    cursor.close()
-    db.commit()
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    #GET JUST ADDED ID FOR ORGANISM from DB
-    name = '{}.{}.{}.{}'.format(odata['abbrev'], source, buildv, annov)
-    chado_name = '{}.{}.{}'.format(odata['abbrev'], source, buildv)
-    aid = None #chado id for genome from analysis table
+    return True
+
+
+def get_chado_analysis(cursor, chado_name)
     logger.info('searching for genome {} in analysis...'.format(chado_name))
     query = '''select analysis_id from analysis where name=%s''' #get chado id
     cursor.execute(query, [chado_name])
@@ -311,14 +271,79 @@ def organism_loader(annotation, db):
         logger.info('found chado analysis_id={} for genome={}'.format(
                                                                 aid, chado_name
                                                                 ))
+        return aid
+
+
+def get_ongenome_organism(cursor, name):
+    logger.info('searching for organism_id for organism {}'.format(name))
     query = '''select organism_id from ongenome.organism where name=%s'''
-    cursor.execute(query, [odata['name']])
+    cursor.execute(query, [name])
     result = cursor.fetchall()
     if not result:
         logger.error('could not find organism id for genome {}'.format(
-                                                                 shortname))
+                                                                 name))
         return False
     oid = result[0]['organism_id']
+    return oid
+
+
+def organism_loader(annotation, db):
+    odata = {
+              'chado_organism_id' : None, 'genus' : None,
+              'species' : None, 'subspecies' : None,
+              'cultivar_type' : None, 'line' : None,
+              'abbrev' : None, 'common_name' : None,
+              'synonyms' : None, 'description' : None,
+              'notes' : None, 'name' : None
+             }
+    directory = os.path.dirname(os.path.abspath(annotation))
+    readme_key = directory.split('.')[-1] #get key
+    source = directory.split('/')[-1].split('.')[0] #get source genome
+    buildv = directory.split('/')[-1].split('.')[1] #get build version
+    annov = directory.split('/')[-1].split('.')[2]  #get annotation version
+    readme = '{}/README.{}.md'.format(directory, readme_key)
+#    anno_glob = '{}/*.gene_models.gff3.gz'.format(directory)
+    if not check_file(readme):
+        logger.error('Could not find: {}'.format(readme))
+        return False
+    logger.info('README {} found'.format(readme))
+    #if len(annotation) > 1:
+    #    logger.error('found too many gene_model files: {}'.format(annotation))
+    #    return False
+    #annotation = annotation[0]
+    #if not check_file(annotation):
+    #    logger.error('Could not find: {}'.format(annotation))
+    #    return False
+    #logger.info('Annotation file {} found'.format(annotation))
+    if not parse_readme(readme, odata):
+        return False
+    if not (odata['abbrev'] and odata['species'] and odata['genus']):
+        logger.error(('Abbreviation, genus, or species is None: '+
+                      '{}, {}, {}'.format(odata['abbrev'], 
+                                          odata['species'], 
+                                          odata['genus'])))
+        return False
+    odata['name'] = odata['abbrev']
+    odata['abbrev'] = odata['abbrev'].split('.')[0]
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if not get_chado_organism(cursor, odata):
+        return False
+    #LOAD ORGANISM DATA load_organism(cursor, odata)
+    if not loaders.load_organism(cursor, odata):
+        return False
+    cursor.close()
+    db.commit()
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    #GET JUST ADDED ID FOR ORGANISM from DB
+    name = '{}.{}.{}.{}'.format(odata['abbrev'], source, buildv, annov)
+    chado_name = '{}.{}.{}'.format(odata['abbrev'], source, buildv)
+#    aid = None #chado id for genome from analysis table
+    aid = get_chado_analysis(cursor, chado_name)
+    if not aid:
+        return False
+    oid = get_ongenome_organism(cursor, odata['name'])
+    if not oid:
+        return False 
     gdata = { #create object to load into db
               'name' : name, 'shortname' : chado_name, 'description' : None,
               'source' : source, 'build' : buildv, 'annotation' : annov,
