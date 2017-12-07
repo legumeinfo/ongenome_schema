@@ -287,84 +287,19 @@ def get_ongenome_organism(cursor, name):
     return oid
 
 
-def organism_loader(annotation, db):
-    odata = {
-              'chado_organism_id' : None, 'genus' : None,
-              'species' : None, 'subspecies' : None,
-              'cultivar_type' : None, 'line' : None,
-              'abbrev' : None, 'common_name' : None,
-              'synonyms' : None, 'description' : None,
-              'notes' : None, 'name' : None
-             }
-    directory = os.path.dirname(os.path.abspath(annotation))
-    readme_key = directory.split('.')[-1] #get key
-    source = directory.split('/')[-1].split('.')[0] #get source genome
-    buildv = directory.split('/')[-1].split('.')[1] #get build version
-    annov = directory.split('/')[-1].split('.')[2]  #get annotation version
-    readme = '{}/README.{}.md'.format(directory, readme_key)
-#    anno_glob = '{}/*.gene_models.gff3.gz'.format(directory)
-    if not check_file(readme):
-        logger.error('Could not find: {}'.format(readme))
-        return False
-    logger.info('README {} found'.format(readme))
-    #if len(annotation) > 1:
-    #    logger.error('found too many gene_model files: {}'.format(annotation))
-    #    return False
-    #annotation = annotation[0]
-    #if not check_file(annotation):
-    #    logger.error('Could not find: {}'.format(annotation))
-    #    return False
-    #logger.info('Annotation file {} found'.format(annotation))
-    if not parse_readme(readme, odata):
-        return False
-    if not (odata['abbrev'] and odata['species'] and odata['genus']):
-        logger.error(('Abbreviation, genus, or species is None: '+
-                      '{}, {}, {}'.format(odata['abbrev'], 
-                                          odata['species'], 
-                                          odata['genus'])))
-        return False
-    odata['name'] = odata['abbrev']
-    odata['abbrev'] = odata['abbrev'].split('.')[0]
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    if not get_chado_organism(cursor, odata):
-        return False
-    #LOAD ORGANISM DATA load_organism(cursor, odata)
-    if not loaders.load_organism(cursor, odata):
-        return False
-    cursor.close()
-    db.commit()
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    #GET JUST ADDED ID FOR ORGANISM from DB
-    name = '{}.{}.{}.{}'.format(odata['abbrev'], source, buildv, annov)
-    chado_name = '{}.{}.{}'.format(odata['abbrev'], source, buildv)
-#    aid = None #chado id for genome from analysis table
-    aid = get_chado_analysis(cursor, chado_name)
-    if not aid:
-        return False
-    oid = get_ongenome_organism(cursor, odata['name'])
-    if not oid:
-        return False 
-    gdata = { #create object to load into db
-              'name' : name, 'shortname' : chado_name, 'description' : None,
-              'source' : source, 'build' : buildv, 'annotation' : annov,
-              'organism_id' : oid, 'notes' : None, 'chado_id' : aid
-             }
-    #LOAD GENOME DATA load_genome(cursor, gdata)
-    if not loaders.load_genome(cursor, gdata):
-        return False
-    cursor.close()
-    db.commit()
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    #GET GENOME ID FROM DB
+def get_ongenome_genome(cursor, name):
     query = '''select genome_id from ongenome.genome where name=%s'''
     cursor.execute(query, [name])
-    result = cursor.fetchall()
+    result = cursor.fetchone()
     if not result:
         logger.error('could not find genome id for genome {}'.format(
                                                                name))
         return False
     goid = result[0]['genome_id']
-    logger.info('Parsing gene models from {}'.format(annotation))
+    return goid
+
+
+def get_chado_model(cursor, goid, annotation):
     with gzip.open(annotation) as fopen:
         for line in fopen:
             gmdata = {
@@ -405,10 +340,85 @@ def organism_loader(annotation, db):
                 else:
                     logger.info('found chado uniquename={}'.format(gid))
                     gmdata['chado_uniquename'] = gid
-                gmdata['genemodel_name'] = gid
+                gmdata['genemodel_name'] = name
             #LOAD gene model load_model(cursor, gmdata)
                 if not loaders.load_model(cursor, gmdata):
                     return False
+    return True
+
+
+def organism_loader(annotation, db):
+    odata = {
+              'chado_organism_id' : None, 'genus' : None,
+              'species' : None, 'subspecies' : None,
+              'cultivar_type' : None, 'line' : None,
+              'abbrev' : None, 'common_name' : None,
+              'synonyms' : None, 'description' : None,
+              'notes' : None, 'name' : None
+             }
+    directory = os.path.dirname(os.path.abspath(annotation))
+    readme_key = directory.split('.')[-1] #get key
+    source = directory.split('/')[-1].split('.')[0] #get source genome
+    buildv = directory.split('/')[-1].split('.')[1] #get build version
+    annov = directory.split('/')[-1].split('.')[2]  #get annotation version
+    readme = '{}/README.{}.md'.format(directory, readme_key)
+#    anno_glob = '{}/*.gene_models.gff3.gz'.format(directory)
+    if not check_file(readme):
+        logger.error('Could not find: {}'.format(readme))
+        return False
+    logger.info('README {} found'.format(readme))
+    #if len(annotation) > 1:
+    #    logger.error('found too many gene_model files: {}'.format(annotation))
+    #    return False
+    #annotation = annotation[0]
+    #if not check_file(annotation):
+    #    logger.error('Could not find: {}'.format(annotation))
+    #    return False
+    #logger.info('Annotation file {} found'.format(annotation))
+    if not parse_readme(readme, odata): #populate organism data
+        return False
+    if not (odata['abbrev'] and odata['species'] and odata['genus']):
+        logger.error(('Abbreviation, genus, or species is None: '+
+                      '{}, {}, {}'.format(odata['abbrev'], 
+                                          odata['species'], 
+                                          odata['genus'])))
+        return False
+    odata['name'] = odata['abbrev']
+    odata['abbrev'] = odata['abbrev'].split('.')[0]
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if not get_chado_organism(cursor, odata): # get chado organism id
+        return False
+    if not loaders.load_organism(cursor, odata): # load organism into ongenome
+        return False
+    cursor.close()
+    db.commit()
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    name = '{}.{}.{}.{}'.format(odata['abbrev'], source, buildv, annov)
+    chado_name = '{}.{}.{}'.format(odata['abbrev'], source, buildv)
+#    aid = None #chado id for genome from analysis table
+    aid = get_chado_analysis(cursor, chado_name) # chado analysis id for genome
+    if not aid:
+        return False
+    oid = get_ongenome_organism(cursor, odata['name']) # ongenome.organism_id
+    if not oid:
+        return False 
+    gdata = { #create object to load into db
+              'name' : name, 'shortname' : chado_name, 'description' : None,
+              'source' : source, 'build' : buildv, 'annotation' : annov,
+              'organism_id' : oid, 'notes' : None, 'chado_id' : aid
+             }
+    if not loaders.load_genome(cursor, gdata): # load genome into ongenome
+        return False
+    cursor.close()
+    db.commit()
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    #GET GENOME ID FROM DB
+    goid = get_ongenome_genome(cursor, name)
+    if not goid:
+        return False
+    logger.info('Parsing gene models from {}'.format(annotation))
+    if not get_chado_model(cursor, goid, annotation):
+        return False
     cursor.close()
     db.commit()
     return True
