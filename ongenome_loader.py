@@ -609,10 +609,14 @@ def dataset_loader(dataset, db, t, counts): #could add checks beyond expression 
                         return False
                 s_list = samples[1:]
             else:
+#                get_model_id = '''select genemodel_id from 
+#                                  ongenome.genemodel where
+#                                  genemodel_name=%s'''
                 get_model_id = '''select genemodel_id from 
                                   ongenome.genemodel where
-                                  genemodel_name=%s'''
+                                  chado_uniquename=%s'''
                 cursor.execute(get_model_id, [samples[0]])
+                logger.info('searching for {} in ongenome genemodels'.format(samples[0]))
                 result = cursor.fetchone()
                 if not result:
                     logger.error('no gene model id for {}'.format(
