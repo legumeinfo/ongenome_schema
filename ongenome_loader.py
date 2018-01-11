@@ -253,7 +253,7 @@ def get_chado_organism(cursor, odata):
     return True
 
 
-def get_chado_analysis(cursor, chado_name)
+def get_chado_analysis(cursor, chado_name):
     logger.info('searching for genome {} in analysis...'.format(chado_name))
     query = '''select analysis_id from analysis where name=%s''' #get chado id
     cursor.execute(query, [chado_name])
@@ -295,7 +295,7 @@ def get_ongenome_genome(cursor, name):
         logger.error('could not find genome id for genome {}'.format(
                                                                name))
         return False
-    goid = result[0]['genome_id']
+    goid = result['genome_id']
     return goid
 
 
