@@ -282,13 +282,14 @@ class OngenomeLoaders:
             logger.info('adding new dataset {}'.format(shortname))
             insert = '''insert into ongenome.dataset
                     (genome_id, datasetsource_id, method_id, accession_no, name,
-                     shortname, description, notes, load_date)
+                     shortname, description, notes, load_date, exemplar)
                     values
-                    (%s, %s, %s, %s, %s, %s, %s, %s, %s) returning dataset_id'''
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
+                    returning dataset_id'''
             try:
                 cursor.execute(insert, [genome_id, datasetsource_id, method_id,
                                         accession_no, name, shortname,
-                                        description, notes, load_date])
+                                        description, notes, load_date, None])
                 result = cursor.fetchone()
                 adata['samples']['dataset_id'] = result['dataset_id']
             except psycopg2.Error as e:

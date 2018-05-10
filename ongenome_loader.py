@@ -49,6 +49,12 @@ help='''Tabular matrix of profile neighbor coorelations\n\n''')
 parser.add_argument('--dataset_accession', metavar = '<dataset.accession_no>',
 help='''Dataset accesion to use to assocaite neighbor data. Ex: cicar1\n\n''')
 
+parser.add_argument('--example_dataset', metavar = '<dataset.accession_no>',
+help='''Dataset accesion to use to assocaite neighbor data. Ex: cicar1\n\n''')
+
+parser.add_argument('--example_gene', metavar = '<gene_id>',
+help='''Gene model identifier to use as example\n\n''')
+
 parser.add_argument('--logger', metavar = '</path/to/log/my_log.log>',
 help='''Provide the path and file for the logger Default: ./ongenome.log.\n\n''', 
 default='./ongenome.log')
@@ -747,7 +753,29 @@ def neighbors_loader(neighbors, db, acc, threshold):
 #    for s in values:
 #        for v in values[s]:
 #            print '{}\t{}\t{}\t{}'.format(s, v, values[s][v], did)
-
+def update_example(db, gene, dataset):
+    '''Change the value of the exemplar field in ongenome.dataset
+    
+       Uses ongenome.dataset.accession_no=dataset to get record else error
+    '''
+    logger.info('Updating dataset {} with gene example {}'.format(dataset,
+                                                                  gene))
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    check = '''select dataset_id from ongenome.dataset
+               where accession_no=%s'''
+    cursor.execute(check, [dataset])
+    result = cursor.fetchone()
+    if not result:
+        logger.error('Could not find dataset.accession_no={}'.format(dataset))
+        return False
+    update = '''update ongenome.dataset set exemplar=%s 
+                where accession_no=%s'''
+    cursor.execute(update, [gene, dataset])
+    logger.info('Commiting update...')
+    db.commit()
+    cursor.close()
+    logger.info('Done')
+    return True
 
 
 if __name__ == '__main__':
@@ -760,7 +788,19 @@ if __name__ == '__main__':
     counts = args.counts
     neighbors = args.profile_neighbors
     accession = args.dataset_accession
+    example_gene = args.example_gene
+    example_dataset = args.example_dataset
 #    data = {'organism' : [], 'genome' : [], 'gene_models' : []}
+    if example_gene or example_dataset:
+        if not (example_gene and example_dataset):
+            logger.error('Example gene and dataset required for loading!')
+            db.close()
+            sys.exit(1)
+        if not update_example(db, example_gene, example_dataset):
+            db.close()
+            sys.exit(1)
+        db.close()
+        sys.exit(0)
     if args.drop_schema:
         if not drop_schema(db):
             logger.error('Could not drop ongenome Schema!')
