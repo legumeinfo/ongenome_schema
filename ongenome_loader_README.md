@@ -96,7 +96,13 @@ Program Options:
    ```
    This will load datasetsource, dataset, sample, method and expression
 
-3. Load Profile Neighbors  
+3. Load an exemplar gene model for a dataset.
+   ```
+   python ongenome_loader.py --example_gene cicar.ICC4958.gnm2.ann1.Ca_01885 --example_dataset cicar1
+   ```
+   This will load the exemplar in the dataset table for the corresponding dataset.
+
+4. Load Profile Neighbors  
    ```
    python ongenome_loader.py --profile_neighbors /home/ccameron/ongenome/ongenome_schema/cor_matrix_df_rounded_corrected_names.tsv --dataset_accession cicar1
    ```
